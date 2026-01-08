@@ -118,3 +118,4 @@
 - 2026-01-06T21:58:00 - Initial Dev: Add placeholder assets and icons
 - 2026-01-06T14:26:00 - Initial Dev: Implement core navigation logic
 - 2026-01-07T21:39:00 - Initial Dev: Design database schema mockups
+- 2026-01-08T18:25:00 - Initial Dev: Draft store models
