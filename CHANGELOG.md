@@ -188,3 +188,4 @@
 - 2026-02-12T16:49:00 - Initial Dev: Draft store models
 - 2026-02-12T12:20:00 - Initial Dev: Draft home screen layout
 - 2026-02-12T15:49:00 - Initial Dev: Build user profile skeleton
+- 2026-02-13T19:33:00 - Initial Dev: Design database schema mockups
