@@ -234,3 +234,4 @@
 - 2026-03-05T21:29:00 - Initial Dev: Add placeholder assets and icons
 - 2026-03-06T20:56:00 - Initial Dev: Fix styling inconsistencies
 - 2026-03-06T14:38:00 - Initial Dev: Implement theme provider
+- 2026-03-06T12:02:00 - Initial Dev: Draft store models
