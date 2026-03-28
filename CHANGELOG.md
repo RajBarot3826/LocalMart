@@ -285,3 +285,4 @@
 - 2026-03-28T18:14:00 - Initial Dev: Optimize widget build methods
 - 2026-03-28T12:03:00 - Initial Dev: Add placeholder assets and icons
 - 2026-03-28T12:37:00 - Initial Dev: Implement theme provider
+- 2026-03-28T12:03:00 - Initial Dev: Draft store models
