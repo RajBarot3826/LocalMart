@@ -290,3 +290,4 @@
 - 2026-03-31T14:10:00 - Initial Dev: Configure Flutter environment
 - 2026-03-31T19:42:00 - Initial Dev: Implement theme provider
 - 2026-03-31T17:22:00 - Initial Dev: Implement theme provider
+- 2026-04-01T11:53:00 - Initial Dev: Draft home screen layout
