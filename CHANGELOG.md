@@ -323,3 +323,4 @@
 - 2026-04-16T16:56:00 - Initial Dev: Setup initial project structure
 - 2026-04-16T19:21:00 - Initial Dev: Implement bottom navigation bar
 - 2026-04-16T11:25:00 - Initial Dev: Refactor generic utility functions
+- 2026-04-17T14:40:00 - Initial Dev: Draft store models
