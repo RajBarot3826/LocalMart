@@ -1,2 +1,3 @@
 - 2026-05-11T21:01:00 - Add error handling for network
 - 2026-05-11T17:54:00 - Add localization strings for Gujarati
+- 2026-05-11T19:57:00 - Update theme colors and dark mode
