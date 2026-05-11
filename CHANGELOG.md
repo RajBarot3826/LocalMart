@@ -2,3 +2,4 @@
 - 2026-05-11T17:54:00 - Add localization strings for Gujarati
 - 2026-05-11T19:57:00 - Update theme colors and dark mode
 - 2026-05-11T18:51:00 - Improve search functionality
+- 2026-05-11T12:03:00 - Add offline mode indicator
