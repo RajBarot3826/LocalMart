@@ -3,3 +3,4 @@
 - 2026-05-11T19:57:00 - Update theme colors and dark mode
 - 2026-05-11T18:51:00 - Improve search functionality
 - 2026-05-11T12:03:00 - Add offline mode indicator
+- 2026-05-12T21:12:00 - Update Hindi translations
