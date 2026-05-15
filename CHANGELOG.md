@@ -13,3 +13,4 @@
 - 2026-05-14T12:28:00 - Add error handling for network
 - 2026-05-14T21:35:00 - Refactor state management
 - 2026-05-15T13:42:00 - Optimize image loading
+- 2026-05-15T18:17:00 - Add offline mode indicator
