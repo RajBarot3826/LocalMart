@@ -15,3 +15,4 @@
 - 2026-05-15T13:42:00 - Optimize image loading
 - 2026-05-15T18:17:00 - Add offline mode indicator
 - 2026-05-15T21:43:00 - Update UI components
+- 2026-05-17T10:14:00 - Refactor product details page
