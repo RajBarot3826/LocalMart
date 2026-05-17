@@ -17,3 +17,4 @@
 - 2026-05-15T21:43:00 - Update UI components
 - 2026-05-17T10:14:00 - Refactor product details page
 - 2026-05-17T10:27:00 - Refactor product details page
+- 2026-05-17T22:33:00 - Add offline mode indicator
