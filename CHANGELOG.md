@@ -33,3 +33,4 @@
 - 2026-05-22T16:42:00 - Improve search functionality
 - 2026-05-22T22:50:00 - Optimize API handler
 - 2026-05-24T10:54:00 - Update UI components
+- 2026-05-24T14:22:00 - Fix text overflow in cards
