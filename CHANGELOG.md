@@ -35,3 +35,4 @@
 - 2026-05-24T10:54:00 - Update UI components
 - 2026-05-24T14:22:00 - Fix text overflow in cards
 - 2026-05-25T18:11:00 - Fix navigation bug on back press
+- 2026-05-25T15:14:00 - Fix text overflow in cards
