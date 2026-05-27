@@ -41,3 +41,4 @@
 - 2026-05-26T22:35:00 - Fix navigation bug on back press
 - 2026-05-27T11:00:00 - Add localization strings for Gujarati
 - 2026-05-27T18:06:00 - Improve search functionality
+- 2026-05-27T16:48:00 - Fix text overflow in cards
