@@ -39,3 +39,4 @@
 - 2026-05-25T13:27:00 - Update Hindi translations
 - 2026-05-25T15:32:00 - Optimize API handler
 - 2026-05-26T22:35:00 - Fix navigation bug on back press
+- 2026-05-27T11:00:00 - Add localization strings for Gujarati
