@@ -64,3 +64,4 @@
 - 2026-06-04T14:19:00 - Enhance glassmorphism effects
 - 2026-06-04T20:54:00 - Optimize image loading
 - 2026-06-05T11:18:00 - Fix layout issues in store view
+- 2026-06-05T16:15:00 - Fix navigation bug on back press
