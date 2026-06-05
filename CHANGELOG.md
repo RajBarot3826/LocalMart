@@ -66,3 +66,4 @@
 - 2026-06-05T11:18:00 - Fix layout issues in store view
 - 2026-06-05T16:15:00 - Fix navigation bug on back press
 - 2026-06-05T10:37:00 - Fix navigation bug on back press
+- 2026-06-05T13:15:00 - Update Hindi translations
