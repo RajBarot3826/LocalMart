@@ -71,3 +71,4 @@
 - 2026-06-08T17:10:00 - Refactor state management
 - 2026-06-09T20:39:00 - Refactor product details page
 - 2026-06-09T10:54:00 - Add offline mode indicator
+- 2026-06-09T10:56:00 - Fix layout issues in store view
