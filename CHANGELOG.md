@@ -87,3 +87,4 @@
 - 2026-06-15T14:42:00 - Optimize image loading
 - 2026-06-15T18:10:00 - Optimize image loading
 - 2026-06-15T17:45:00 - Refactor product details page
+- 2026-06-16T22:11:00 - Add offline mode indicator
