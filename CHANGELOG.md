@@ -100,3 +100,4 @@
 - 2026-06-19T18:45:00 - Fix text overflow in cards
 - 2026-06-19T19:39:00 - Fix layout issues in store view
 - 2026-06-19T10:36:00 - Refactor product details page
+- 2026-06-19T18:08:00 - Add offline mode indicator
