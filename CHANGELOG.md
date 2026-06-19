@@ -98,3 +98,4 @@
 - 2026-06-18T19:19:00 - Enhance glassmorphism effects
 - 2026-06-19T12:03:00 - Optimize API handler
 - 2026-06-19T18:45:00 - Fix text overflow in cards
+- 2026-06-19T19:39:00 - Fix layout issues in store view
