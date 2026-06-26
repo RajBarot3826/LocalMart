@@ -708,6 +708,53 @@ try {
 }
 PHP;
 
+$stores = <<<'PHP'
+<?php
+// api/stores.php
+header("Content-Type: application/json");
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET");
+header("Access-Control-Allow-Headers: Content-Type");
+
+require_once __DIR__ . '/../includes/db_config.php';
+
+try {
+    $stmt = $conn->query("SELECT id, shop_name, owner_name, email, shop_description, address, store_type, contact_number, qr_code_token, logo_path, theme_color, theme_bg, font_style, created_at, views, delivery_enabled, delivery_fee_type, delivery_fee, latitude, longitude FROM vendors ORDER BY id DESC");
+    $stores = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+    $http_host = $_SERVER['HTTP_HOST'];
+    $base_dir = dirname(dirname($_SERVER['PHP_SELF']));
+    $base_dir = str_replace('\\', '/', $base_dir);
+    if ($base_dir === '/') {
+        $base_dir = '';
+    }
+    $base_url = "$protocol://$http_host$base_dir/";
+
+    foreach ($stores as &$store) {
+        if ($store['logo_path']) {
+            $store['logo_url'] = $base_url . $store['logo_path'];
+        } else {
+            $store['logo_url'] = null;
+        }
+        $store['delivery_enabled'] = intval($store['delivery_enabled'] ?? 0);
+        $store['delivery_fee'] = floatval($store['delivery_fee'] ?? 0.0);
+        $store['views'] = intval($store['views'] ?? 0);
+    }
+
+    echo json_encode([
+        "status" => true,
+        "stores" => $stores
+    ]);
+} catch (PDOException $e) {
+    echo json_encode([
+        "status" => false,
+        "message" => "Database error: " . $e->getMessage()
+    ]);
+}
+?>
+PHP;
+
 // Write updated contents on the server
 $success1 = file_put_contents('get_available_orders.php', $get_available_orders);
 $success2 = file_put_contents('accept_order.php', $accept_order);
@@ -721,6 +768,7 @@ $success9 = file_put_contents('place_order.php', $place_order);
 $success10 = file_put_contents('rider_earnings.php', $rider_earnings);
 $success11 = file_put_contents('admin_reports.php', $admin_reports);
 $success12 = file_put_contents('products.php', $products);
+$success13 = file_put_contents('stores.php', $stores);
 
 echo "<h1>Backend Patch Applied!</h1>";
 echo "<ul>";
@@ -736,6 +784,7 @@ echo "<li>place_order.php: " . ($success9 !== false ? "✅ OK" : "❌ FAILED") .
 echo "<li>rider_earnings.php: " . ($success10 !== false ? "✅ OK" : "❌ FAILED") . "</li>";
 echo "<li>admin_reports.php: " . ($success11 !== false ? "✅ OK" : "❌ FAILED") . "</li>";
 echo "<li>products.php: " . ($success12 !== false ? "✅ OK" : "❌ FAILED") . "</li>";
+echo "<li>stores.php: " . ($success13 !== false ? "✅ OK" : "❌ FAILED") . "</li>";
 echo "</ul>";
 echo "<h3>The commission tracking system and order split API backend have been written successfully!</h3>";
 ?>
