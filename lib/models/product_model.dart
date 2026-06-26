@@ -32,11 +32,19 @@ class Product {
   factory Product.fromJson(Map<String, dynamic> json) {
     int apiViews = int.tryParse(json['views']?.toString() ?? '0') ?? 0;
 
+    String parsedPrice = json['price']?.toString() ?? '0';
+    // If live server has not been patched yet (base_price is missing), 
+    // dynamically apply 15% markup fallback on the client.
+    if (json['base_price'] == null) {
+      double base = double.tryParse(parsedPrice) ?? 0.0;
+      parsedPrice = (base * 1.15).toStringAsFixed(2);
+    }
+
     return Product(
       id: (json['id'] ?? json['product_id'] ?? '').toString(),
       storeId: (json['vendor_id'] ?? json['store_id'] ?? json['shop_id'] ?? '').toString(),
       name: (json['name'] ?? json['product_name'] ?? 'Product').toString(),
-      price: _formatPrice(json['price']?.toString() ?? '0'),
+      price: _formatPrice(parsedPrice),
       category: (json['category'] ?? json['product_type'] ?? 'All').toString(),
       description: (json['description'] ?? '').toString(),
       imageUrl: _parseFirstImage(json),
