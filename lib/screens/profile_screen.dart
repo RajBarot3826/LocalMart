@@ -2,8 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
+import '../utils/cart_manager.dart';
+import '../utils/address_manager.dart';
 import '../utils/locale_provider.dart';
 import '../utils/app_translations.dart';
+import 'my_orders_screen.dart';
 import '../widgets/connection_error_widget.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -101,6 +104,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('userName', nameController.text.trim());
               await prefs.setString('userPhone', phoneController.text.trim());
+              if (!mounted) return;
               if (!ctx.mounted) return;
               Navigator.pop(ctx);
               _loadProfile();
@@ -163,7 +167,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: AppTranslations.supportedLanguages.length,
-                itemBuilder: (context, index) {
+                itemBuilder: (listCtx, index) {
                   final entry = AppTranslations.supportedLanguages.entries.elementAt(index);
                   final code = entry.key;
                   final name = entry.value;
@@ -270,6 +274,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     TextButton(
                       onPressed: () async {
                         await prefs.remove('visitHistory');
+                        if (!mounted) return;
+                        if (!ctx.mounted) return;
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -568,6 +574,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               onTap: _showEditProfile,
                             ),
                             settingsTile(
+                              Icons.shopping_bag_rounded,
+                              'My Orders',
+                              'Track and view previous orders',
+                              onTap: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const MyOrdersScreen()));
+                              },
+                            ),
+                            settingsTile(
                               Icons.location_on_rounded,
                               LocaleProvider.tr('my_addresses'),
                               LocaleProvider.tr('manage_addresses'),
@@ -594,7 +608,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               trailing: Switch(
                                 value: notificationsOn,
                                 onChanged: (_) => _toggleNotifications(),
-                                activeColor: AppTheme.primary,
+                                activeThumbColor: AppTheme.primary,
                               ),
                             ),
                             settingsTile(
@@ -631,9 +645,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: OutlinedButton.icon(
                                 onPressed: () async {
                                   final prefs = await SharedPreferences.getInstance();
-                                  await prefs.clear();
+                                  await prefs.remove('isLoggedIn');
+                                  await prefs.remove('userId');
+                                  await prefs.remove('userName');
+                                  await prefs.remove('userPhone');
+                                  await prefs.remove('userEmail');
+                                  await prefs.remove('userRole');
+                                  CartManager().clearCart();
+                                  AddressManager().clearMemory();
                                   if (!context.mounted) return;
-                                  Navigator.pushReplacementNamed(context, '/login');
+                                  Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
                                 },
                                 icon: const Icon(Icons.logout_rounded, color: Colors.red),
                                 label: Text(LocaleProvider.tr('logout'), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),

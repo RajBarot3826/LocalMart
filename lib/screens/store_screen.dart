@@ -4,6 +4,7 @@ import '../widgets/store_card.dart';
 import '../models/shop_model.dart';
 import '../utils/api_handler.dart';
 import '../utils/locale_provider.dart';
+import '../widgets/banner_slider.dart';
 import 'product_screen.dart';
 
 class StoreScreen extends StatefulWidget {
@@ -106,8 +107,13 @@ class _StoreScreenState extends State<StoreScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: Column(
-        children: [
+      body: RefreshIndicator(
+        onRefresh: fetchStores,
+        color: AppTheme.primary,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
           // HEADER
           Container(
             padding: const EdgeInsets.only(top: 60, bottom: 30, left: 20, right: 20),
@@ -144,7 +150,7 @@ class _StoreScreenState extends State<StoreScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(15),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)],
                   ),
                   child: TextField(
                     onChanged: _filterShops,
@@ -184,38 +190,54 @@ class _StoreScreenState extends State<StoreScreen> {
               ),
             ),
 
+          const SizedBox(height: 10),
+
+          // BANNER SLIDER (Top Reached Stores)
+          if (!isLoading && allShops.isNotEmpty)
+            BannerSlider(
+              products: const [], // No products, only stores on this screen
+              stores: allShops,
+            ),
+            
           const SizedBox(height: 5),
 
           // STORE LIST
-          Expanded(
-            child: isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
-                : filteredShops.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.store_outlined, size: 60, color: Colors.grey.shade400),
-                            const SizedBox(height: 15),
-                            Text(LocaleProvider.tr('no_stores'), style: TextStyle(color: Colors.grey.shade600, fontSize: 16)),
-                            const SizedBox(height: 15),
-                            ElevatedButton.icon(
-                              onPressed: fetchStores,
-                              icon: const Icon(Icons.refresh, color: Colors.white, size: 18),
-                              label: Text(LocaleProvider.tr('retry'), style: const TextStyle(color: Colors.white)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primary,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: fetchStores,
-                        color: AppTheme.primary,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          if (isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.only(top: 50.0),
+                child: CircularProgressIndicator(color: AppTheme.primary),
+              ),
+            )
+          else if (filteredShops.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 50.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.store_outlined, size: 60, color: Colors.grey.shade400),
+                    const SizedBox(height: 15),
+                    Text(LocaleProvider.tr('no_stores'), style: TextStyle(color: Colors.grey.shade600, fontSize: 16)),
+                    const SizedBox(height: 15),
+                    ElevatedButton.icon(
+                      onPressed: fetchStores,
+                      icon: const Icon(Icons.refresh, color: Colors.white, size: 18),
+                      label: Text(LocaleProvider.tr('retry'), style: const TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                           itemCount: filteredShops.length,
                           itemBuilder: (context, index) {
                             final shop = filteredShops[index];
@@ -252,6 +274,9 @@ class _StoreScreenState extends State<StoreScreen> {
                                           "address": shop.address,
                                           "description": shop.description,
                                           "logoUrl": shop.logoUrl,
+                                          "delivery_enabled": shop.deliveryEnabled,
+                                          "delivery_fee_type": shop.deliveryFeeType,
+                                          "delivery_fee": shop.deliveryFee,
                                         },
                                       ),
                                     ),
@@ -261,9 +286,9 @@ class _StoreScreenState extends State<StoreScreen> {
                             );
                           },
                         ),
-                      ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

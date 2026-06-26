@@ -3,8 +3,13 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../theme/app_theme.dart';
 import '../models/product_model.dart';
+import '../models/shop_model.dart';
 import '../utils/api_handler.dart';
 import '../utils/locale_provider.dart';
+import '../widgets/top_reached_products.dart';
+import '../widgets/product_quantity_selector.dart';
+import '../widgets/cart_bottom_bar.dart';
+import '../utils/cart_manager.dart';
 import 'product_detail_screen.dart';
 
 class ProductScreen extends StatefulWidget {
@@ -26,15 +31,98 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
   String searchQuery = '';
   String currentSort = 'Default';
   List<String> categories = ['All'];
+  late Map<String, dynamic> shopData;
+
+  bool get deliveryEnabled => shopData["delivery_enabled"] == true || shopData["delivery_enabled"] == 1;
 
   @override
   void initState() {
     super.initState();
+    shopData = Map<String, dynamic>.from(widget.shop);
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
+
+    // Set store info in CartManager for delivery tracking
+    if (deliveryEnabled) {
+      CartManager().setStoreInfo(
+        storeId: (shopData["id"] ?? "").toString(),
+        storeName: shopData["name"]?.toString() ?? 'Store',
+        storeAddress: (shopData["address"] ?? "").toString(),
+        deliveryEnabled: true,
+        deliveryFeeType: (shopData["delivery_fee_type"] ?? 'free').toString(),
+        deliveryFee: double.tryParse(shopData["delivery_fee"]?.toString() ?? '0') ?? 0.0,
+      );
+    }
+
+    // Increment view count when store is opened (centralized)
+    final String currentStoreId = (shopData["id"] ?? "").toString();
+    if (currentStoreId.isNotEmpty) {
+      ApiHandler.incrementView('store', currentStoreId);
+    }
+
     fetchProducts();
+    fetchLatestStoreInfo();
+  }
+
+  Future<void> fetchLatestStoreInfo() async {
+    try {
+      final String currentStoreId = (shopData["id"] ?? "").toString();
+      if (currentStoreId.isEmpty) return;
+
+      final data = await ApiHandler.get('stores.php');
+      List<dynamic> dataList = [];
+      if (data is Map && data.containsKey('stores')) {
+        dataList = data['stores'] ?? [];
+      } else if (data is List) {
+        dataList = data;
+      }
+
+      final List<Shop> shops = dataList.map((json) => Shop.fromJson(json)).toList();
+      Shop? matchedShop;
+      for (final s in shops) {
+        if (s.id.toString() == currentStoreId) {
+          matchedShop = s;
+          break;
+        }
+      }
+
+      if (matchedShop != null && mounted) {
+        setState(() {
+          shopData = {
+            "id": matchedShop!.id,
+            "name": matchedShop.name,
+            "category": matchedShop.category,
+            "rating": matchedShop.rating,
+            "distance": matchedShop.distance,
+            "open": matchedShop.isOpen,
+            "owner": matchedShop.owner,
+            "phone": matchedShop.phone,
+            "address": matchedShop.address,
+            "description": matchedShop.description,
+            "logoUrl": matchedShop.logoUrl,
+            "delivery_enabled": matchedShop.deliveryEnabled,
+            "delivery_fee_type": matchedShop.deliveryFeeType,
+            "delivery_fee": matchedShop.deliveryFee,
+          };
+          
+          // Update CartManager with latest info
+          if (deliveryEnabled) {
+            CartManager().setStoreInfo(
+              storeId: matchedShop.id,
+              storeName: matchedShop.name,
+              storeAddress: matchedShop.address,
+              deliveryEnabled: true,
+              deliveryFeeType: matchedShop.deliveryFeeType,
+              deliveryFee: matchedShop.deliveryFee,
+            );
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("❌ Failed to fetch latest store details: $e");
+    }
   }
 
   Future<void> fetchProducts() async {
@@ -58,7 +146,7 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
           dataList.first is Map &&
           (dataList.first['name']?.toString().contains('Offline') == true);
 
-      final String currentStoreId = (widget.shop["id"] ?? "").toString();
+      final String currentStoreId = (shopData["id"] ?? "").toString();
 
       final products = dataList
           .map((json) => Product.fromJson(json))
@@ -128,11 +216,11 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
   }
 
   Future<void> _callStore() async {
-    final phone = (widget.shop["phone"] ?? "").toString().replaceAll(RegExp(r'[^\d+]'), '');
+    final phone = (shopData["phone"] ?? "").toString().replaceAll(RegExp(r'[^\d+]'), '');
     if (phone.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("No phone number available")),
+          SnackBar(content: Text(LocaleProvider.tr('no_phone_number'))),
         );
       }
       return;
@@ -146,10 +234,10 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
 
   Future<void> _shareStore() async {
     try {
-      final name = widget.shop["name"] ?? "Store";
-      final owner = widget.shop["owner"] ?? "";
-      final phone = widget.shop["phone"] ?? "";
-      final address = widget.shop["address"] ?? "";
+      final name = shopData["name"] ?? "Store";
+      final owner = shopData["owner"] ?? "";
+      final phone = shopData["phone"] ?? "";
+      final address = shopData["address"] ?? "";
       final itemCount = allProducts.length;
 
       final text = "🛒 Check out *$name* on LocalMart!\n\n"
@@ -175,6 +263,7 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
+      bottomNavigationBar: deliveryEnabled ? const CartBottomBar() : null,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
@@ -219,7 +308,7 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
                     right: -20,
                     child: CircleAvatar(
                       radius: 60,
-                      backgroundColor: Colors.white.withOpacity(0.05),
+                      backgroundColor: Colors.white.withValues(alpha: 0.05),
                     ),
                   ),
                   Padding(
@@ -228,7 +317,7 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Hero(
-                          tag: widget.shop["name"] ?? "shop_icon",
+                          tag: shopData["name"] ?? "shop_icon",
                           child: Container(
                             height: 70,
                             width: 70,
@@ -249,16 +338,16 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                LocaleProvider.tr((widget.shop["name"] ?? LocaleProvider.tr('store')).toString()),
+                                LocaleProvider.tr((shopData["name"] ?? LocaleProvider.tr('store')).toString()),
                                 style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                               ),
                               Text(
-                                LocaleProvider.tr((widget.shop["category"] ?? LocaleProvider.tr('local_shop')).toString()),
+                                LocaleProvider.tr((shopData["category"] ?? LocaleProvider.tr('local_shop')).toString()),
                                 style: const TextStyle(color: Colors.white70, fontSize: 14),
                               ),
-                              if ((widget.shop["description"] ?? "").toString().isNotEmpty)
+                              if ((shopData["description"] ?? "").toString().isNotEmpty)
                                 Text(
-                                  LocaleProvider.tr((widget.shop["description"]).toString()),
+                                  LocaleProvider.tr((shopData["description"]).toString()),
                                   style: const TextStyle(color: Colors.white60, fontSize: 12),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -277,52 +366,52 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
           // SHOP INFO CARD with Call & Share buttons
           SliverToBoxAdapter(
             child: Container(
-              margin: const EdgeInsets.all(20),
-              padding: const EdgeInsets.all(20),
+              margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+              padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(25),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 5))
                 ],
               ),
               child: Column(
                 children: [
-                  infoItem(Icons.person_rounded, LocaleProvider.tr('owner'), LocaleProvider.tr((widget.shop["owner"] ?? LocaleProvider.tr('owner_placeholder')).toString())),
-                  const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1)),
+                  infoItem(Icons.person_rounded, LocaleProvider.tr('owner'), LocaleProvider.tr((shopData["owner"] ?? LocaleProvider.tr('owner_placeholder')).toString())),
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1)),
                   InkWell(
                     onTap: _callStore,
                     child: Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)),
-                          child: Icon(Icons.phone_rounded, color: Colors.green.shade700, size: 22),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
+                          child: Icon(Icons.phone_rounded, color: Colors.green.shade700, size: 20),
                         ),
-                        const SizedBox(width: 15),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(LocaleProvider.tr('phone'), style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
+                              Text(LocaleProvider.tr('phone'), style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 2),
                               Text(
-                                (widget.shop["phone"] ?? LocaleProvider.tr('na')).toString(),
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.green.shade700),
+                                (shopData["phone"] ?? LocaleProvider.tr('na')).toString(),
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.green.shade700),
                               ),
                             ],
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(10)),
-                          child: Text(LocaleProvider.tr('call_now').toUpperCase(), style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold, fontSize: 12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
+                          child: Text(LocaleProvider.tr('call_now').toUpperCase(), style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold, fontSize: 11)),
                         ),
                       ],
                     ),
                   ),
-                  const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1)),
-                  infoItem(Icons.location_on_rounded, LocaleProvider.tr('address'), LocaleProvider.tr((widget.shop["address"] ?? LocaleProvider.tr('na')).toString())),
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1)),
+                  infoItem(Icons.location_on_rounded, LocaleProvider.tr('address'), LocaleProvider.tr((shopData["address"] ?? LocaleProvider.tr('na')).toString())),
                 ],
               ),
             ),
@@ -332,41 +421,53 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
           if (isOfflineMode && !isLoading)
             SliverToBoxAdapter(
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20),
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+                margin: const EdgeInsets.symmetric(horizontal: 15),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(12)),
                 child: Row(
                   children: [
-                    Icon(Icons.wifi_off_rounded, color: Colors.orange.shade800, size: 18),
-                    const SizedBox(width: 10),
+                    Icon(Icons.wifi_off_rounded, color: Colors.orange.shade800, size: 16),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(LocaleProvider.tr('offline_mode'),
-                          style: TextStyle(color: Colors.orange.shade900, fontSize: 12, fontWeight: FontWeight.w500)),
+                          style: TextStyle(color: Colors.orange.shade900, fontSize: 11, fontWeight: FontWeight.w500)),
                     ),
-                    InkWell(onTap: fetchProducts, child: Icon(Icons.refresh_rounded, color: Colors.orange.shade800, size: 20)),
+                    InkWell(onTap: fetchProducts, child: Icon(Icons.refresh_rounded, color: Colors.orange.shade800, size: 18)),
                   ],
                 ),
+              ),
+            ),
+
+          // TOP REACHED PRODUCTS
+          if (!isLoading && filteredProducts.isNotEmpty)
+            SliverToBoxAdapter(
+              child: TopReachedProductsWidget(
+                products: filteredProducts,
+                storeName: shopData["name"] ?? "Unknown Store",
+                storePhone: shopData["phone"] ?? "",
+                storeAddress: shopData["address"] ?? "",
+                showCartButtons: deliveryEnabled,
               ),
             ),
 
           // SEARCH BAR
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 15),
+              padding: const EdgeInsets.fromLTRB(15, 10, 15, 10),
               child: Container(
-                height: 50,
+                height: 45,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.grey.shade200),
                 ),
                 child: TextField(
                   onChanged: _filterBySearch,
                   decoration: InputDecoration(
                     hintText: LocaleProvider.tr('search_items_hint'),
-                    prefixIcon: Icon(Icons.search, color: AppTheme.primary),
+                    prefixIcon: Icon(Icons.search, color: AppTheme.primary, size: 20),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                    contentPadding: EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
@@ -377,18 +478,18 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
           if (!isLoading && categories.length > 1)
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 50,
+                height: 40,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 15),
                   itemCount: categories.length,
                   itemBuilder: (context, index) {
                     final cat = categories[index];
                     final isSelected = cat == selectedCategory;
                     return Padding(
-                      padding: const EdgeInsets.only(right: 10),
+                      padding: const EdgeInsets.only(right: 8),
                       child: FilterChip(
-                        label: Text(cat == 'All' ? LocaleProvider.tr('show_all') : cat),
+                        label: Text(cat == 'All' ? LocaleProvider.tr('show_all') : LocaleProvider.tr(cat)),
                         selected: isSelected,
                         onSelected: (_) => _filterByCategory(cat),
                         backgroundColor: Colors.white,
@@ -396,9 +497,9 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
                         labelStyle: TextStyle(
                           color: isSelected ? Colors.white : AppTheme.dark,
                           fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                          fontSize: 12,
                         ),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         side: BorderSide(color: isSelected ? AppTheme.primary : Colors.grey.shade300),
                       ),
                     );
@@ -409,33 +510,33 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
 
           // LIST SECTION TITLE
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
             sliver: SliverToBoxAdapter(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(LocaleProvider.tr('price_list'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+                  Text(LocaleProvider.tr('price_list'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.dark)),
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                        child: Text("${filteredProducts.length} ${LocaleProvider.tr('items')}", style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold)),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: AppTheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                        child: Text("${filteredProducts.length} ${LocaleProvider.tr('items')}", style: const TextStyle(color: AppTheme.primary, fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
                       const SizedBox(width: 5),
                       PopupMenuButton<String>(
-                        icon: const Icon(Icons.sort_rounded, color: AppTheme.dark),
+                        icon: const Icon(Icons.sort_rounded, color: AppTheme.dark, size: 20),
                         tooltip: LocaleProvider.tr('sort_products'),
                         onSelected: (value) {
                           currentSort = value;
                           _applyFilters();
                         },
                         itemBuilder: (context) => [
-                          PopupMenuItem(value: 'Default', child: Text(LocaleProvider.tr('sort_default'))),
-                          PopupMenuItem(value: 'Price: Low to High', child: Text(LocaleProvider.tr('sort_low_high'))),
-                          PopupMenuItem(value: 'Price: High to Low', child: Text(LocaleProvider.tr('sort_high_low'))),
-                          PopupMenuItem(value: 'A-Z', child: Text(LocaleProvider.tr('sort_az'))),
-                          PopupMenuItem(value: 'Z-A', child: Text(LocaleProvider.tr('sort_za'))),
+                          PopupMenuItem(value: 'Default', child: Text(LocaleProvider.tr('sort_default'), style: const TextStyle(fontSize: 13))),
+                          PopupMenuItem(value: 'Price: Low to High', child: Text(LocaleProvider.tr('sort_low_high'), style: const TextStyle(fontSize: 13))),
+                          PopupMenuItem(value: 'Price: High to Low', child: Text(LocaleProvider.tr('sort_high_low'), style: const TextStyle(fontSize: 13))),
+                          PopupMenuItem(value: 'A-Z', child: Text(LocaleProvider.tr('sort_az'), style: const TextStyle(fontSize: 13))),
+                          PopupMenuItem(value: 'Z-A', child: Text(LocaleProvider.tr('sort_za'), style: const TextStyle(fontSize: 13))),
                         ],
                       ),
                     ],
@@ -509,7 +610,7 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
   }
 
   Widget _buildShopIcon() {
-    final logoUrl = widget.shop["logoUrl"]?.toString();
+    final logoUrl = shopData["logoUrl"]?.toString();
     if (logoUrl != null && logoUrl.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(18),
@@ -553,13 +654,14 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
               product: {
                 ...product.rawData,
                 "name": product.name,
-                "price": "₹${product.price}",
-                "image": product.icon,
+                "price": product.price, // ensure price doesn't get double ₹ symbols
+                "icon": product.icon,
                 "category": product.category,
                 "description": product.description,
                 "imageUrl": product.imageUrl,
-                "storeName": widget.shop["name"],
-                "storePhone": widget.shop["phone"],
+                "storeName": shopData["name"],
+                "storePhone": shopData["phone"],
+                "storeAddress": shopData["address"],
               },
             ),
           ),
@@ -570,7 +672,7 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(22),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 5))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 5))],
         ),
         child: Column(
           children: [
@@ -587,13 +689,11 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
               child: Column(
                 children: [
                   Text(LocaleProvider.tr(product.name), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.dark)),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.dark)),
                   const SizedBox(height: 5),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(10)),
-                    child: Text("₹${product.price}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
+                  Text("₹${product.price}", style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  if (deliveryEnabled) ProductQuantitySelector(product: product),
                 ],
               ),
             ),

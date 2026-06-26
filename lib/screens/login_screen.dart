@@ -3,8 +3,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../widgets/animated_header.dart';
 import '../utils/api_handler.dart';
+import '../utils/cart_manager.dart';
+import '../utils/address_manager.dart';
 import '../utils/locale_provider.dart';
 import 'register_screen.dart';
+import 'rider_register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool hidePassword = true;
   bool isLoading = false;
+  String selectedRole = 'customer';
 
   Future<void> _loginUser() async {
     if (!_formKey.currentState!.validate()) return;
@@ -28,7 +32,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final data = {
       'phone': phoneController.text.trim(),
+      'email': phoneController.text.trim(),
       'password': passwordController.text,
+      'role': selectedRole,
     };
 
     final response = await ApiHandler.post('app_login.php', data);
@@ -39,14 +45,45 @@ class _LoginScreenState extends State<LoginScreen> {
       // Save session
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isLoggedIn', true);
+      // Save user ID for rider API calls
+      final userId = response['user']['id'];
+      if (userId != null) {
+        await prefs.setInt('userId', userId is int ? userId : int.tryParse(userId.toString()) ?? 0);
+      }
       await prefs.setString('userName', response['user']['name'] ?? 'User');
       await prefs.setString('userPhone', response['user']['phone'] ?? phoneController.text);
+      await prefs.setString('userEmail', phoneController.text);
+      String role = response['role'] ?? 'customer';
+      await prefs.setString('userRole', role);
+      if (role == 'rider') {
+        await prefs.setString('vehicleNumber', response['user']['vehicle_number'] ?? '');
+        await prefs.setBool('isRiderOnline', false); // Start offline!
+        // Ensure backend knows they are offline
+        try {
+          await ApiHandler.post('toggle_rider_status.php', {
+            'rider_id': userId.toString(),
+            'status': 'offline',
+          });
+        } catch (e) {
+          debugPrint("Failed to set rider offline on login: $e");
+        }
+      }
+      
+      final userPhone = response['user']['phone'] ?? phoneController.text;
+      await AddressManager().loadForUser(userPhone);
+
+      CartManager().clearCart();
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(LocaleProvider.tr('login'))),
       );
-      Navigator.pushReplacementNamed(context, '/home');
+
+      if (role == 'rider') {
+        Navigator.pushReplacementNamed(context, '/rider_main');
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
     } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -85,12 +122,77 @@ class _LoginScreenState extends State<LoginScreen> {
                   key: _formKey,
                   child: Column(
                     children: [
+                      // Role Selector Slider
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => selectedRole = 'customer'),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: selectedRole == 'customer' ? AppTheme.primary : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(15),
+                                    boxShadow: selectedRole == 'customer'
+                                        ? [BoxShadow(color: AppTheme.primary.withValues(alpha: 0.3), blurRadius: 4, offset: const Offset(0, 2))]
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    "Customer",
+                                    style: TextStyle(
+                                      color: selectedRole == 'customer' ? Colors.white : Colors.grey.shade700,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => selectedRole = 'rider'),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: selectedRole == 'rider' ? AppTheme.primary : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(15),
+                                    boxShadow: selectedRole == 'rider'
+                                        ? [BoxShadow(color: AppTheme.primary.withValues(alpha: 0.3), blurRadius: 4, offset: const Offset(0, 2))]
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    "Delivery Rider",
+                                    style: TextStyle(
+                                      color: selectedRole == 'rider' ? Colors.white : Colors.grey.shade700,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       TextFormField(
                         controller: phoneController,
-                        keyboardType: TextInputType.phone,
+                        keyboardType: selectedRole == 'customer' ? TextInputType.phone : TextInputType.emailAddress,
                         decoration: InputDecoration(
-                          hintText: LocaleProvider.tr('phone_number'),
-                          prefixIcon: const Icon(Icons.phone, color: AppTheme.primary),
+                          hintText: selectedRole == 'customer'
+                              ? LocaleProvider.tr('phone_number')
+                              : "Rider ID",
+                          prefixIcon: Icon(
+                            selectedRole == 'customer' ? Icons.phone : Icons.person,
+                            color: AppTheme.primary,
+                          ),
                           filled: true,
                           fillColor: AppTheme.background,
                           border: OutlineInputBorder(
@@ -101,10 +203,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return LocaleProvider.tr('enter_username');
+                            return selectedRole == 'customer'
+                                ? LocaleProvider.tr('enter_phone')
+                                : "Please enter your Rider ID";
                           }
-                          if (value.length < 10) {
-                            return LocaleProvider.tr('enter_username');
+                          if (selectedRole == 'customer' && value.length < 10) {
+                            return LocaleProvider.tr('enter_phone');
                           }
                           return null;
                         },
@@ -154,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               SnackBar(content: Text(LocaleProvider.tr('coming_soon'))),
                             );
                           },
-                          child: Text(LocaleProvider.tr('password')),
+                          child: Text(LocaleProvider.tr('forgot_password')),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -186,9 +290,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       Row(
                         children: [
                           Expanded(child: Divider(color: Colors.grey.shade300)),
-                          const Padding(
+                          Padding(
                             padding: EdgeInsets.symmetric(horizontal: 10),
-                            child: Text("OR", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                            child: Text(LocaleProvider.tr('or'), style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                           ),
                           Expanded(child: Divider(color: Colors.grey.shade300)),
                         ],
@@ -216,6 +320,23 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Text(
                               LocaleProvider.tr('register'),
                               style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => const RiderRegisterScreen()),
+                              );
+                            },
+                            child: const Text(
+                              "Become a Delivery Partner",
+                              style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
                             ),
                           ),
                         ],

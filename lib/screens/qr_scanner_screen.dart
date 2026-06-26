@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../theme/app_theme.dart';
 import '../models/shop_model.dart';
 import '../utils/api_handler.dart';
+import '../utils/locale_provider.dart';
 import 'product_screen.dart';
 
 class QrScannerScreen extends StatefulWidget {
@@ -89,6 +90,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   "address": shop.address,
                   "description": shop.description,
                   "logoUrl": shop.logoUrl,
+                  "delivery_enabled": shop.deliveryEnabled,
+                  "delivery_fee_type": shop.deliveryFeeType,
+                  "delivery_fee": shop.deliveryFee,
                 },
               ),
             ),
@@ -114,7 +118,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Scan Store QR", style: TextStyle(color: Colors.white)),
+        title: Text(LocaleProvider.tr('scan_store_qr'), style: const TextStyle(color: Colors.white)),
         backgroundColor: AppTheme.primary,
         iconTheme: const IconThemeData(color: Colors.white),
       ),

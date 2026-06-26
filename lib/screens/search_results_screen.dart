@@ -159,7 +159,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                       margin: const EdgeInsets.only(bottom: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 4,
-                      shadowColor: Colors.black.withOpacity(0.1),
+                      shadowColor: Colors.black.withValues(alpha: 0.1),
                       child: InkWell(
                         onTap: () {
                           Navigator.push(
@@ -167,6 +167,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                             MaterialPageRoute(
                               builder: (context) => ProductDetailScreen(
                                 product: {
+                                  ...product.rawData,
                                   "name": product.name,
                                   "price": "₹${product.price}",
                                   "image": product.icon,
@@ -175,6 +176,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                   "imageUrl": product.imageUrl,
                                   "storeName": storeName,
                                   "storePhone": storePhone,
+                                  "storeAddress": store?.address ?? "",
                                 },
                               ),
                             ),
@@ -198,7 +200,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                       ? Image.network(
                                           product.imageUrl,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => Icon(product.icon, color: AppTheme.primary, size: 40),
+                                          errorBuilder: (context, error, stackTrace) => Icon(product.icon, color: AppTheme.primary, size: 40),
                                         )
                                       : Icon(product.icon, color: AppTheme.primary, size: 40),
                                 ),
@@ -242,7 +244,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                   icon: const Icon(Icons.call, color: AppTheme.primary),
                                   onPressed: () => _callStore(storePhone),
                                   style: IconButton.styleFrom(
-                                    backgroundColor: AppTheme.primary.withOpacity(0.1),
+                                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
                                   ),
                                 ),
                             ],

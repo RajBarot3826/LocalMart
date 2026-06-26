@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:convert';
 import '../theme/app_theme.dart';
 import '../utils/locale_provider.dart';
+import '../widgets/cart_bottom_bar.dart';
+import '../widgets/product_quantity_selector.dart';
+import '../models/product_model.dart';
+import '../utils/api_handler.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -17,6 +22,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  int _currentImageIndex = 0;
+  List<String> _images = [];
 
   @override
   void initState() {
@@ -30,7 +37,69 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
     _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
         .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
 
+    _images = _extractImages();
+
     _controller.forward();
+    
+    // Increment real views on backend when product is opened
+    String pId = (widget.product['id'] ?? widget.product['product_id'] ?? '').toString();
+    if (pId.isNotEmpty) {
+      ApiHandler.incrementView('product', pId);
+    }
+  }
+
+  List<String> _extractImages() {
+    final p = widget.product;
+    List<String> extracted = [];
+
+    // Check all possible keys that might hold images
+    final keysToCheck = ['images', 'images_urls', 'image_url', 'image', 'photos', 'gallery', 'product_images', 'pictures'];
+
+    for (String key in keysToCheck) {
+      if (!p.containsKey(key) || p[key] == null) continue;
+
+      final val = p[key];
+
+      if (val is List) {
+        for (var item in val) {
+          if (item.toString().trim().isNotEmpty) extracted.add(item.toString().trim());
+        }
+      } else if (val is String && val.trim().isNotEmpty) {
+        final strVal = val.trim();
+        // Check if it's a JSON array
+        if (strVal.startsWith('[') && strVal.endsWith(']')) {
+          try {
+            final List<dynamic> parsed = jsonDecode(strVal);
+            for (var item in parsed) {
+              if (item.toString().trim().isNotEmpty) extracted.add(item.toString().trim());
+            }
+          } catch (_) {
+            // Not a valid JSON array, fallback to comma split
+            final parts = strVal.split(RegExp(r'[,|;]'));
+            for (var part in parts) {
+              if (part.trim().isNotEmpty) extracted.add(part.trim());
+            }
+          }
+        } else {
+          // Normal comma separated string
+          final parts = strVal.split(RegExp(r'[,|;]'));
+          for (var part in parts) {
+            if (part.trim().isNotEmpty) extracted.add(part.trim());
+          }
+        }
+      }
+    }
+
+    // Fallback to imageUrl if everything else is empty
+    if (extracted.isEmpty && p['imageUrl'] != null && p['imageUrl'].toString().isNotEmpty) {
+      final parts = p['imageUrl'].toString().split(RegExp(r'[,|;]'));
+      for (var part in parts) {
+        if (part.trim().isNotEmpty) extracted.add(part.trim());
+      }
+    }
+    
+    // Deduplicate and return
+    return extracted.toSet().toList();
   }
 
   @override
@@ -43,7 +112,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
     final phone = (widget.product["storePhone"] ?? "").toString().replaceAll(RegExp(r'[^\d+]'), '');
     if (phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No store phone number available")),
+        SnackBar(content: Text(LocaleProvider.tr('no_phone_number'))),
       );
       return;
     }
@@ -78,6 +147,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
+      bottomNavigationBar: (widget.product["delivery_enabled"] == true || widget.product["delivery_enabled"] == '1' || widget.product["delivery_enabled"] == 1) ? const CartBottomBar() : null,
       body: Stack(
         children: [
           CustomScrollView(
@@ -103,7 +173,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
                         right: -50,
                         child: CircleAvatar(
                           radius: 120,
-                          backgroundColor: AppTheme.background.withOpacity(0.5),
+                          backgroundColor: AppTheme.background.withValues(alpha: 0.5),
                         ),
                       ),
                       Positioned(
@@ -111,32 +181,71 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
                         left: -30,
                         child: CircleAvatar(
                           radius: 80,
-                          backgroundColor: AppTheme.primary.withOpacity(0.05),
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.05),
                         ),
                       ),
-                      // Main Product Icon or Image
+                      // Main Product Images
                       Container(
                         width: double.infinity,
                         height: double.infinity,
                         padding: const EdgeInsets.only(top: 60, bottom: 30),
-                        child: Hero(
-                          tag: widget.product["name"],
-                          child: widget.product["imageUrl"] != null && widget.product["imageUrl"].toString().isNotEmpty
-                              ? Image.network(
-                                  widget.product["imageUrl"],
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (c, e, s) => Icon(
-                                    widget.product["image"] as IconData,
-                                    size: 180,
-                                    color: AppTheme.primary,
-                                  ),
-                                )
-                              : Icon(
-                                  widget.product["image"] as IconData,
+                        child: _images.isEmpty
+                            ? Hero(
+                                tag: widget.product["name"],
+                                child: Icon(
+                                  widget.product["icon"] as IconData? ?? Icons.shopping_bag_outlined,
                                   size: 180,
                                   color: AppTheme.primary,
                                 ),
-                        ),
+                              )
+                            : Stack(
+                                children: [
+                                  PageView.builder(
+                                    itemCount: _images.length,
+                                    onPageChanged: (index) {
+                                      setState(() {
+                                        _currentImageIndex = index;
+                                      });
+                                    },
+                                    itemBuilder: (context, index) {
+                                      return Hero(
+                                        tag: index == 0 ? widget.product["name"] : '${widget.product["name"]}_$index',
+                                        child: Image.network(
+                                          _images[index],
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (c, e, s) => Icon(
+                                            widget.product["icon"] as IconData? ?? Icons.shopping_bag_outlined,
+                                            size: 180,
+                                            color: AppTheme.primary,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  if (_images.length > 1)
+                                    Positioned(
+                                      bottom: 0,
+                                      left: 0,
+                                      right: 0,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: List.generate(
+                                          _images.length,
+                                          (index) => AnimatedContainer(
+                                            duration: const Duration(milliseconds: 300),
+                                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                                            width: _currentImageIndex == index ? 20 : 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                              color: _currentImageIndex == index ? AppTheme.primary : AppTheme.primary.withValues(alpha: 0.2),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                       ),
                     ],
                   ),
@@ -165,16 +274,32 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade100,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              LocaleProvider.tr('in_stock'),
-                              style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
+                          Builder(
+                            builder: (context) {
+                              final String status = (widget.product["availability"] ?? widget.product["stock_status"] ?? 'In Stock').toString();
+                              Color bgColor = Colors.green.shade100;
+                              Color textColor = Colors.green;
+                              
+                              if (status.toLowerCase().contains('out')) {
+                                bgColor = Colors.red.shade100;
+                                textColor = Colors.red;
+                              } else if (status.toLowerCase().contains('pre')) {
+                                bgColor = Colors.orange.shade100;
+                                textColor = Colors.orange.shade800;
+                              }
+                              
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: bgColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  LocaleProvider.tr(status),
+                                  style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              );
+                            }
                           ),
                           const SizedBox(height: 15),
 
@@ -202,21 +327,66 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 15),
+                          if (widget.product["delivery_enabled"] == true || widget.product["delivery_enabled"] == '1' || widget.product["delivery_enabled"] == 1)
+                            SizedBox(
+                              width: 150,
+                              height: 45,
+                              child: ProductQuantitySelector(
+                                product: Product(
+                                  id: widget.product["id"]?.toString() ?? '',
+                                  storeId: (widget.product["store_id"] ?? widget.product["vendor_id"] ?? widget.product["shop_id"] ?? '').toString(),
+                                  name: widget.product["name"]?.toString() ?? '',
+                                  price: (widget.product["price"] ?? '').toString().replaceAll('₹', '').trim(),
+                                  category: widget.product["category"]?.toString() ?? '',
+                                  description: widget.product["description"]?.toString() ?? '',
+                                  imageUrl: widget.product["imageUrl"]?.toString() ?? '',
+                                  icon: widget.product["icon"] is IconData
+                                      ? widget.product["icon"] as IconData
+                                      : Icons.shopping_bag,
+                                  rawData: _buildSafeRawData(),
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 15),
                           Row(
                             children: [
                               Icon(Icons.storefront, size: 20, color: Colors.grey.shade600),
                               const SizedBox(width: 8),
-                              Text(
-                                "${LocaleProvider.tr('sold_by')} ${LocaleProvider.tr(widget.product["storeName"] ?? 'unknown_store')}",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey.shade700,
+                              Expanded(
+                                child: Text(
+                                  "${LocaleProvider.tr('sold_by')} ${LocaleProvider.tr(widget.product["store_name"] ?? widget.product["storename"] ?? widget.product["storeName"] ?? 'unknown_store')}",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
                           ),
+                          if ((widget.product["store_address"] ?? widget.product["storeaddress"] ?? widget.product["storeAddress"]) != null && 
+                              (widget.product["store_address"] ?? widget.product["storeaddress"] ?? widget.product["storeAddress"]).toString().isNotEmpty) ...[
+                            const SizedBox(height: 5),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.location_on, size: 20, color: Colors.grey.shade600),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    LocaleProvider.tr((widget.product["store_address"] ?? widget.product["storeaddress"] ?? widget.product["storeAddress"]).toString()),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 30),
 
                           // Action Buttons
@@ -238,7 +408,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
                               const SizedBox(width: 15),
                               Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
+                                  color: Colors.blue.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(15),
                                 ),
                                 child: IconButton(
@@ -279,8 +449,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
                           const SizedBox(height: 12),
                           Text(
                             (widget.product["description"] ?? "").toString().isNotEmpty 
-                                ? widget.product["description"].toString()
-                                : "Get this premium quality product from your nearest local mart. We ensure the freshest stock and competitive pricing for all our local customers.",
+                                ? LocaleProvider.tr(widget.product["description"].toString())
+                                : LocaleProvider.tr("Get this premium quality product from your nearest local mart. We ensure the freshest stock and competitive pricing for all our local customers."),
                             style: TextStyle(
                               color: Colors.grey.shade700,
                               height: 1.6,
@@ -309,7 +479,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
                   color: Colors.white,
                   shape: BoxShape.circle,
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))
                   ],
                 ),
                 child: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTheme.dark, size: 22),
@@ -321,27 +491,50 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
     );
   }
 
+  final List<String> ignoreKeys = [
+    'id', 'product_id', 'vendor_id', 'store_id', 'shop_id', 'name', 'product_name', 
+    'price', 'description', 'image_url', 'imageurl', 'image_path', 'images', 'images_urls', 'imagesurls', 'photos', 'gallery', 'icon', 'icon_url',
+    'category', 'store_name', 'storename', 'storeaddress', 'store_address', 'distance', 'rating', 'logo_url', 'created_at', 
+    'updated_at', 'specifications', 'status', 'is_active', 'deleted_at', 'phone', 
+    'contact', 'email', 'storephone', 'store_phone'
+  ];
+
   bool _hasAnySpecs() {
     final p = widget.product;
-    return p.containsKey('weight') || p.containsKey('type') || 
-           p.containsKey('shelf_life') || p.containsKey('grade') ||
-           p.containsKey('brand') || p.containsKey('warranty') || 
-           p.containsKey('battery') || p.containsKey('ram') || 
-           p.containsKey('processor') || p.containsKey('display');
+    bool hasSpecs = false;
+    p.forEach((key, value) {
+      if (!ignoreKeys.contains(key.toLowerCase().trim()) && value != null && value.toString().trim().isNotEmpty && value.toString().trim().toLowerCase() != 'null') {
+        hasSpecs = true;
+      }
+    });
+    
+    if (p.containsKey('specifications') && p['specifications'] != null && p['specifications'].toString().isNotEmpty && p['specifications'] != "[]" && p['specifications'] != "{}") {
+      hasSpecs = true;
+    }
+    
+    return hasSpecs;
   }
 
   Widget buildDynamicSpecs() {
     final p = widget.product;
     List<Widget> specWidgets = [];
 
-    // Dynamic specifications sent from the backend
+    // Dynamic specifications sent from the backend as JSON string
     if (p['specifications'] != null) {
-      if (p['specifications'] is Map) {
-        (p['specifications'] as Map).forEach((key, value) {
+      var specData = p['specifications'];
+      
+      if (specData is String) {
+        try {
+          specData = jsonDecode(specData);
+        } catch (_) {}
+      }
+
+      if (specData is Map) {
+        specData.forEach((key, value) {
           specWidgets.add(specItem(Icons.label_important_outline_rounded, LocaleProvider.tr(key.toString()), LocaleProvider.tr(value.toString())));
         });
-      } else if (p['specifications'] is List) {
-        for (var spec in (p['specifications'] as List)) {
+      } else if (specData is List) {
+        for (var spec in specData) {
           if (spec is Map) {
             final key = spec['name'] ?? spec['key'] ?? 'Detail';
             final value = spec['value'] ?? spec['val'] ?? '';
@@ -351,39 +544,42 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
       }
     }
 
-    // Legacy / Hardcoded Specs
-    if (p['weight'] != null && p['weight'].toString().isNotEmpty) {
-      specWidgets.add(specItem(Icons.scale_rounded, LocaleProvider.tr("Weight"), LocaleProvider.tr(p['weight'].toString())));
-    }
-    if (p['type'] != null && p['type'].toString().isNotEmpty) {
-      specWidgets.add(specItem(Icons.eco_rounded, LocaleProvider.tr("Type"), LocaleProvider.tr(p['type'].toString())));
-    }
-    if (p['shelf_life'] != null && p['shelf_life'].toString().isNotEmpty) {
-      specWidgets.add(specItem(Icons.calendar_month_rounded, LocaleProvider.tr("Shelf Life"), LocaleProvider.tr(p['shelf_life'].toString())));
-    }
-    if (p['grade'] != null && p['grade'].toString().isNotEmpty) {
-      specWidgets.add(specItem(Icons.verified_rounded, LocaleProvider.tr("Grade"), LocaleProvider.tr(p['grade'].toString())));
-    }
+    // Automatically parse and display all extra vendor dashboard fields
+    p.forEach((key, value) {
+      if (!ignoreKeys.contains(key.toLowerCase().trim()) && value != null && value.toString().trim().isNotEmpty && value.toString().trim().toLowerCase() != 'null') {
+        
+        // Prepare Title Case Key Name (e.g. "weight_qty" -> "Weight Qty")
+        String displayKey = key.toString().replaceAll('_', ' ').replaceAll('-', ' ').trim();
+        displayKey = displayKey.split(' ').map((word) => word.isNotEmpty ? '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}' : '').join(' ');
+        
+        // Automatically determine an appropriate icon based on the key name
+        IconData icon = Icons.label_important_outline_rounded;
+        String lowerKey = key.toLowerCase();
+        if (lowerKey.contains('weight') || lowerKey.contains('qty') || lowerKey.contains('quantity')) {
+          icon = Icons.scale_rounded;
+        } else if (lowerKey.contains('type') || lowerKey.contains('category')) {
+          icon = Icons.eco_rounded;
+        } else if (lowerKey.contains('life') || lowerKey.contains('date') || lowerKey.contains('time')) {
+          icon = Icons.calendar_month_rounded;
+        } else if (lowerKey.contains('grade') || lowerKey.contains('quality')) {
+          icon = Icons.verified_rounded;
+        } else if (lowerKey.contains('brand')) {
+          icon = Icons.branding_watermark_outlined;
+        } else if (lowerKey.contains('warranty')) {
+          icon = Icons.security_rounded;
+        } else if (lowerKey.contains('display') || lowerKey.contains('screen')) {
+          icon = Icons.screenshot_monitor_rounded;
+        } else if (lowerKey.contains('battery')) {
+          icon = Icons.battery_charging_full_rounded;
+        } else if (lowerKey.contains('processor') || lowerKey.contains('cpu')) {
+          icon = Icons.memory_rounded;
+        } else if (lowerKey.contains('ram') || lowerKey.contains('memory')) {
+          icon = Icons.sd_card_rounded;
+        }
 
-    // Electronics Specs
-    if (p['brand'] != null && p['brand'].toString().isNotEmpty) {
-      specWidgets.add(specItem(Icons.branding_watermark_outlined, LocaleProvider.tr("Brand"), LocaleProvider.tr(p['brand'].toString())));
-    }
-    if (p['warranty'] != null && p['warranty'].toString().isNotEmpty) {
-      specWidgets.add(specItem(Icons.security_rounded, LocaleProvider.tr("Warranty"), LocaleProvider.tr(p['warranty'].toString())));
-    }
-    if (p['display'] != null && p['display'].toString().isNotEmpty) {
-      specWidgets.add(specItem(Icons.screenshot_monitor_rounded, LocaleProvider.tr("Display"), LocaleProvider.tr(p['display'].toString())));
-    }
-    if (p['battery'] != null && p['battery'].toString().isNotEmpty) {
-      specWidgets.add(specItem(Icons.battery_charging_full_rounded, LocaleProvider.tr("Battery"), LocaleProvider.tr(p['battery'].toString())));
-    }
-    if (p['processor'] != null && p['processor'].toString().isNotEmpty) {
-      specWidgets.add(specItem(Icons.memory_rounded, LocaleProvider.tr("Processor"), LocaleProvider.tr(p['processor'].toString())));
-    }
-    if (p['ram'] != null && p['ram'].toString().isNotEmpty) {
-      specWidgets.add(specItem(Icons.sd_card_rounded, LocaleProvider.tr("RAM"), LocaleProvider.tr(p['ram'].toString())));
-    }
+        specWidgets.add(specItem(icon, LocaleProvider.tr(displayKey), LocaleProvider.tr(value.toString())));
+      }
+    });
 
     // Group into rows of 2
     List<Widget> rows = [];
@@ -411,7 +607,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
       decoration: BoxDecoration(
         color: AppTheme.background,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.primary.withOpacity(0.1)),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -429,5 +625,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
         ],
       ),
     );
+  }
+
+  /// Builds a JSON-safe copy of widget.product by stripping non-serializable
+  /// values like IconData so json.encode() won't crash in CartManager._saveCart().
+  Map<String, dynamic> _buildSafeRawData() {
+    final Map<String, dynamic> safe = {};
+    widget.product.forEach((key, value) {
+      if (value is IconData) return; // skip non-serializable
+      safe[key] = value;
+    });
+    return safe;
   }
 }

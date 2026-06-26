@@ -1,4 +1,4 @@
-import 'dart:io';
+ import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -104,11 +104,11 @@ class _AES {
         int first = temp[0];
         temp[0] = temp[1]; temp[1] = temp[2]; temp[2] = temp[3]; temp[3] = first;
         // SubWord
-        for (int j = 0; j < 4; j++) temp[j] = _sBox[temp[j]];
+        for (int j = 0; j < 4; j++) { temp[j] = _sBox[temp[j]]; }
         temp[0] ^= _rcon[i ~/ nk - 1];
       }
       List<int> word = List.filled(4, 0);
-      for (int j = 0; j < 4; j++) word[j] = w[i - nk][j] ^ temp[j];
+      for (int j = 0; j < 4; j++) { word[j] = w[i - nk][j] ^ temp[j]; }
       w.add(word);
     }
 
@@ -183,7 +183,7 @@ class _AES {
 }
 
 class ApiHandler {
-  static const String baseUrl = 'https://localmartbhavnagar.infinityfreeapp.com/localmart/api';
+  static const String baseUrl = 'https://localmart.free.nf/api';
 
   // Persistent cookie store
   static final Map<String, String> _cookies = {};
@@ -239,7 +239,7 @@ class ApiHandler {
           .map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value.toString())}')
           .join('&');
 
-      request.write(encodedBody);
+      request.add(utf8.encode(encodedBody));
 
       final response = await request.close().timeout(const Duration(seconds: 15));
       final responseBody = await response.transform(utf8.decoder).join();
@@ -256,6 +256,65 @@ class ApiHandler {
     } catch (e) {
       debugPrint("❌ POST request failed: $e");
       return {"status": "error", "message": "Network error"};
+    }
+  }
+
+  /// POST method (sends application/json)
+  static Future<dynamic> postJson(String endpoint, Map<String, dynamic> body) async {
+    final targetUrl = '$baseUrl/$endpoint';
+    
+    // Check challenge first with a simple GET to ensure cookies are set
+    if (!_challengePassed) {
+      await get('stores.php'); // Dummy call to solve challenge if needed
+    }
+
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 15);
+      client.userAgent = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36';
+
+      final request = await client.postUrl(Uri.parse(targetUrl));
+      request.headers.set('Accept', 'application/json, */*');
+      request.headers.set('Content-Type', 'text/plain');
+      if (_cookies.isNotEmpty) {
+        request.headers.set('Cookie', _cookies.entries.map((e) => '${e.key}=${e.value}').join('; '));
+      }
+
+      // Convert body to JSON format
+      final encodedBody = json.encode(body);
+
+      request.add(utf8.encode(encodedBody));
+
+      final response = await request.close().timeout(const Duration(seconds: 15));
+      final responseBody = await response.transform(utf8.decoder).join();
+      
+      _extractCookiesFromHeaders(response.headers);
+      client.close();
+
+      if (_isJson(responseBody)) {
+        return json.decode(responseBody);
+      }
+      
+      debugPrint("⚠️ POST to $endpoint returned non-JSON: ${responseBody.substring(0, responseBody.length > 100 ? 100 : responseBody.length)}");
+      return {"status": "error", "message": "Invalid response from server"};
+    } catch (e) {
+      debugPrint("❌ POST request failed: $e");
+      return {"status": "error", "message": "Network error: $e"};
+    }
+  }
+
+  /// Increment view for a product or store on the backend
+  static Future<void> incrementView(String type, String id) async {
+    try {
+      final body = {
+        type == 'product' ? 'product_id' : 'store_id': id,
+      };
+      // Send as url-encoded POST since PHP handles $_POST easily, or use postJson.
+      // The user mentioned it accepts JSON: {"product_id": 1}
+      final response = await postJson('increment_view.php', body);
+      debugPrint("👀 View Incremented for $type $id: $response");
+    } catch (e) {
+      debugPrint("❌ Failed to increment view: $e");
     }
   }
 
@@ -441,7 +500,7 @@ class ApiHandler {
     try {
       debugPrint("🔗 Trying allorigins proxy...");
       final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 15);
+      client.connectionTimeout = const Duration(seconds: 15); 
 
       final proxyUrl = 'https://api.allorigins.win/get?url=${Uri.encodeComponent(targetUrl)}';
       final request = await client.getUrl(Uri.parse(proxyUrl));

@@ -39,7 +39,7 @@ class AnimatedHeader extends StatelessWidget {
               height: 150,
               width: 150,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.white.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
             ),
@@ -52,7 +52,7 @@ class AnimatedHeader extends StatelessWidget {
               height: 120,
               width: 120,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.white.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
             ),

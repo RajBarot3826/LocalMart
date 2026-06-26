@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../widgets/store_card.dart';
 import '../models/shop_model.dart';
+import '../models/product_model.dart';
 import '../utils/api_handler.dart';
 import 'store_screen.dart';
 import 'product_screen.dart';
@@ -20,6 +21,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<Shop> featuredShops = [];
+  List<Product> topProducts = [];
   bool isLoading = true;
   final TextEditingController _searchController = TextEditingController();
   String userName = "Guest";
@@ -83,9 +85,20 @@ class _HomeScreenState extends State<HomeScreen> {
         return countB.compareTo(countA); // Descending
       });
 
+      // 5. Parse Top Products
+      final List<Product> parsedProducts = [];
+      for (var json in productsList) {
+        if (json is Map) {
+          try {
+            parsedProducts.add(Product.fromJson(Map<String, dynamic>.from(json)));
+          } catch (_) {}
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         featuredShops = parsedStores.take(2).toList();
+        topProducts = parsedProducts.take(10).toList();
         isLoading = false;
       });
 
@@ -148,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     right: -20,
                     child: CircleAvatar(
                       radius: 80,
-                      backgroundColor: Colors.white.withOpacity(0.05),
+                      backgroundColor: Colors.white.withValues(alpha: 0.05),
                     ),
                   ),
                   Positioned(
@@ -156,7 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     left: -30,
                     child: CircleAvatar(
                       radius: 60,
-                      backgroundColor: Colors.white.withOpacity(0.05),
+                      backgroundColor: Colors.white.withValues(alpha: 0.05),
                     ),
                   ),
                   Positioned(
@@ -186,9 +199,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: const Icon(Icons.storefront, size: 45, color: AppTheme.primary),
                           ),
                           const SizedBox(height: 15),
-                          Text(
-                            "${LocaleProvider.tr('welcome')} $userName 👋",
-                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Text(
+                              "${LocaleProvider.tr('welcome')} ${userName.split(' ').map((s) => s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}' : '').join(' ')} 👋",
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, height: 1.2),
+                            ),
                           ),
                           const SizedBox(height: 5),
                           Text(
@@ -321,6 +340,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           "address": shop.address,
                           "description": shop.description,
                           "logoUrl": shop.logoUrl,
+                          "delivery_enabled": shop.deliveryEnabled,
+                          "delivery_fee_type": shop.deliveryFeeType,
+                          "delivery_fee": shop.deliveryFee,
                         };
 
                         return Padding(
@@ -359,7 +381,7 @@ class _HomeScreenState extends State<HomeScreen> {
           color: color,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: color.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))
+            BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5))
           ],
         ),
         child: Column(

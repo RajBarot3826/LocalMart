@@ -18,7 +18,7 @@ class StoreCard extends StatelessWidget {
     final phone = (shop["phone"] ?? "").toString().replaceAll(RegExp(r'[^\d+]'), '');
     if (phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No phone number available")),
+        SnackBar(content: Text(LocaleProvider.tr('no_phone_number'))),
       );
       return;
     }
@@ -63,7 +63,7 @@ class StoreCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -136,7 +136,7 @@ class StoreCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: isOpen ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                    color: isOpen ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -162,7 +162,7 @@ class StoreCard extends StatelessWidget {
                   label: Text(LocaleProvider.tr('call'), style: const TextStyle(color: AppTheme.primary)),
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    backgroundColor: AppTheme.primary.withOpacity(0.1),
+                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
@@ -172,7 +172,7 @@ class StoreCard extends StatelessWidget {
                   label: Text(LocaleProvider.tr('share'), style: const TextStyle(color: Colors.blue)),
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    backgroundColor: Colors.blue.withOpacity(0.1),
+                    backgroundColor: Colors.blue.withValues(alpha: 0.1),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),

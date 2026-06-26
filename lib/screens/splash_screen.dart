@@ -29,7 +29,12 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
     
     if (isLoggedIn) {
-      Navigator.pushReplacementNamed(context, '/home');
+      final role = prefs.getString('userRole') ?? 'customer';
+      if (role == 'rider') {
+        Navigator.pushReplacementNamed(context, '/rider_main');
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
     } else {
       Navigator.pushReplacement(
         context,
@@ -55,7 +60,7 @@ class _SplashScreenState extends State<SplashScreen> {
               height: 300,
               width: 300,
               decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(.2),
+                color: AppTheme.primary.withValues(alpha: .2),
                 shape: BoxShape.circle,
               ),
             ),

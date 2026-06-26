@@ -29,7 +29,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (!agree) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(LocaleProvider.tr('register'))),
+        SnackBar(content: Text(LocaleProvider.tr('accept_terms_error'))),
       );
       return;
     }
@@ -98,19 +98,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Column(
                     children: [
                       buildField(LocaleProvider.tr('full_name'), Icons.person, nameController, (value) {
-                        if (value == null || value.isEmpty) return LocaleProvider.tr('full_name');
+                        if (value == null || value.isEmpty) return LocaleProvider.tr('enter_fullname');
                         return null;
                       }),
                       const SizedBox(height: 15),
                       buildField(LocaleProvider.tr('phone_number'), Icons.phone, phoneController, (value) {
-                        if (value == null || value.isEmpty) return LocaleProvider.tr('phone_number');
-                        if (value.length < 10) return LocaleProvider.tr('phone_number');
+                        if (value == null || value.isEmpty) return LocaleProvider.tr('enter_phone');
+                        if (value.length < 10) return LocaleProvider.tr('enter_phone');
                         return null;
                       }, keyboardType: TextInputType.phone),
                       const SizedBox(height: 15),
-                      buildField(LocaleProvider.tr('username'), Icons.email, emailController, (value) {
-                        if (value == null || value.isEmpty) return LocaleProvider.tr('enter_username');
-                        if (!value.contains('@')) return LocaleProvider.tr('enter_username');
+                      buildField(LocaleProvider.tr('email'), Icons.email, emailController, (value) {
+                        if (value == null || value.isEmpty) return LocaleProvider.tr('enter_email');
+                        if (!value.contains('@')) return LocaleProvider.tr('enter_email');
                         return null;
                       }, keyboardType: TextInputType.emailAddress),
                       const SizedBox(height: 15),
@@ -134,7 +134,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         value: agree,
                         activeColor: AppTheme.primary,
                         onChanged: (value) => setState(() => agree = value!),
-                        title: Text(LocaleProvider.tr('register'), style: const TextStyle(fontSize: 13)),
+                        title: Text(LocaleProvider.tr('agree_terms'), style: const TextStyle(fontSize: 13)),
                         controlAffinity: ListTileControlAffinity.leading,
                         contentPadding: EdgeInsets.zero,
                       ),

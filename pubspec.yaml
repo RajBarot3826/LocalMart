@@ -23,6 +23,10 @@ dependencies:
   url_launcher: ^6.3.1
   share_plus: ^10.1.4
   shared_preferences: ^2.2.3
+  flutter_map: ^8.3.0
+  latlong2: ^0.9.1
+  location: ^8.0.1
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:

@@ -4,11 +4,20 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/store_screen.dart';
+import 'screens/rider_home_screen.dart';
+import 'screens/rider_main_screen.dart';
+import 'screens/splash_screen.dart';
 import 'utils/locale_provider.dart';
+import 'utils/cart_manager.dart';
+import 'utils/address_manager.dart';
+import 'utils/view_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocaleProvider.instance.load();
+  await CartManager().init();
+  await AddressManager().init();
+  await ViewManager.init();
   runApp(const LocalMartApp());
 }
 
@@ -47,14 +56,18 @@ class _LocalMartAppState extends State<LocalMartApp> {
         scaffoldBackgroundColor: Colors.white,
       ),
 
-      initialRoute: '/login',
+      initialRoute: '/',
 
       routes: {
+        '/': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
         '/stores': (context) => const StoreScreen(),
+        '/rider_home': (context) => const RiderHomeScreen(),
+        '/rider_main': (context) => const RiderMainScreen(),
       },
     );
   }
 }
+

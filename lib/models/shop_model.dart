@@ -12,6 +12,10 @@ class Shop {
   final String qrCodeToken;
   final String? logoUrl;
   final String email;
+  final int views;
+  final bool deliveryEnabled;
+  final String deliveryFeeType; // 'free' or 'paid'
+  final double deliveryFee;
 
   Shop({
     required this.id,
@@ -27,6 +31,10 @@ class Shop {
     this.qrCodeToken = '',
     this.logoUrl,
     this.email = '',
+    this.views = 0,
+    this.deliveryEnabled = false,
+    this.deliveryFeeType = 'free',
+    this.deliveryFee = 0.0,
   });
 
   /// Parse from your real API response format:
@@ -34,8 +42,10 @@ class Shop {
   ///  "email":"g@gmail.com","shop_description":"all grocery iteams...",
   ///  "address":"123,abc,bhavnager.","store_type":"Grocery",
   ///  "contact_number":"9512667374","qr_code_token":"shop_398dea31dff2",
-  ///  "logo_url":"https://...","logo_path":"assets/..."}
+  ///  "logo_url":"https://...","logo_path":"assets/...","views":8900}
   factory Shop.fromJson(Map<String, dynamic> json) {
+    int apiViews = int.tryParse(json['views']?.toString() ?? '0') ?? 0;
+
     return Shop(
       id: (json['id'] ?? json['store_id'] ?? '').toString(),
       name: (json['shop_name'] ?? json['store_name'] ?? json['name'] ?? 'Store').toString(),
@@ -50,6 +60,10 @@ class Shop {
       qrCodeToken: (json['qr_code_token'] ?? '').toString(),
       logoUrl: json['logo_url']?.toString(),
       email: (json['email'] ?? '').toString(),
+      views: apiViews,
+      deliveryEnabled: json['delivery_enabled'] == 1 || json['delivery_enabled'] == true || json['delivery_enabled'] == '1',
+      deliveryFeeType: (json['delivery_fee_type'] ?? 'free').toString(),
+      deliveryFee: double.tryParse(json['delivery_fee']?.toString() ?? '0') ?? 0.0,
     );
   }
 }
