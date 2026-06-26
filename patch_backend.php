@@ -126,26 +126,15 @@ foreach ($items as $item) {
     $quantity = intval($item['quantity'] ?? 1);
     
     // Look up item prices in database to prevent manipulation
-    $prod_stmt = $conn->prepare("SELECT name, price, base_price FROM items WHERE id = ?");
+    $prod_stmt = $conn->prepare("SELECT name, price FROM items WHERE id = ?");
     $prod_stmt->execute([$product_id]);
     $prod = $prod_stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($prod) {
-        $db_price = doubleval($prod['price']);
-        $db_base_price = doubleval($prod['base_price']);
-        
-        if ($db_base_price > 0) {
-            $base_price = $db_base_price;
-            $price = $db_price;
-        } else {
-            $base_price = $db_price;
-            $price = round($base_price * 1.15, 2);
-        }
-        $item_commission = round($price - $base_price, 2);
+        $price = doubleval($prod['price']);
         
         $subtotal += $price * $quantity;
-        $vendor_payout += $base_price * $quantity;
-        $owner_item_commission += $item_commission * $quantity;
+        $vendor_payout += $price * $quantity; // Vendor gets 100% of price
         
         $processed_items[] = [
             "product_id" => $product_id,
@@ -157,7 +146,7 @@ foreach ($items as $item) {
 }
 
 $total_amount = $subtotal + $delivery_fee;
-$owner_total_profit = $owner_item_commission + $owner_delivery_commission;
+$owner_total_profit = $owner_delivery_commission; // Only delivery commission (Owner Item Commission is 0)
 
 // Generate Order ID
 $order_id = "ORD-" . strval(rand(100000, 999999));
@@ -685,19 +674,10 @@ try {
     foreach ($items as $item) {
         $itemId = $item['id'];
         
-        $db_price = doubleval($item['price']);
-        $db_base_price = doubleval($item['base_price']);
-        
-        if ($db_base_price > 0) {
-            $base_price = $db_base_price;
-            $price = $db_price;
-        } else {
-            $base_price = $db_price;
-            $price = round($base_price * 1.15, 2);
-        }
+        $price = doubleval($item['price']);
         
         $item['price'] = number_format($price, 2, '.', '');
-        $item['base_price'] = number_format($base_price, 2, '.', '');
+        $item['base_price'] = number_format($price, 2, '.', '');
         $item['store_id'] = intval($item['vendor_id']);
         
         $primary_image = $item['image_path'];
