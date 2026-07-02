@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:animate_do/animate_do.dart';
 import '../utils/locale_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
@@ -198,62 +199,77 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Container(
-                            height: 85,
-                            width: 85,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(22),
-                              boxShadow: const [
-                                BoxShadow(color: Colors.black26, blurRadius: 15, offset: Offset(0, 5))
-                              ],
+                          FadeInDown(
+                            duration: const Duration(milliseconds: 600),
+                            child: Container(
+                              height: 85,
+                              width: 85,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(22),
+                                boxShadow: const [
+                                  BoxShadow(color: Colors.black26, blurRadius: 15, offset: Offset(0, 5))
+                                ],
+                              ),
+                              child: const Icon(Icons.storefront, size: 45, color: AppTheme.primary),
                             ),
-                            child: const Icon(Icons.storefront, size: 45, color: AppTheme.primary),
                           ),
                           const SizedBox(height: 15),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Text(
-                              "${LocaleProvider.tr('welcome')} ${userName.split(' ').map((s) => s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}' : '').join(' ')} 👋",
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, height: 1.2),
+                          FadeInDown(
+                            duration: const Duration(milliseconds: 700),
+                            delay: const Duration(milliseconds: 100),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              child: Text(
+                                "${LocaleProvider.tr('welcome')} ${userName.split(' ').map((s) => s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}' : '').join(' ')} 👋",
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, height: 1.2),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 5),
-                          Text(
-                            LocaleProvider.tr('discover_stores'),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.white70, fontSize: 16),
+                          FadeInDown(
+                            duration: const Duration(milliseconds: 800),
+                            delay: const Duration(milliseconds: 200),
+                            child: Text(
+                              LocaleProvider.tr('discover_stores'),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white70, fontSize: 16),
+                            ),
                           ),
                           const SizedBox(height: 25),
                           
                           // SEARCH BAR
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Container(
-                              height: 55,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(15),
-                                boxShadow: const [
-                                  BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))
-                                ],
-                              ),
-                              child: TextField(
-                                controller: _searchController,
-                                onSubmitted: _onSearchSubmit,
-                                decoration: InputDecoration(
-                                  hintText: LocaleProvider.tr('search_products_hint'),
-                                  hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
-                                  prefixIcon: const Icon(Icons.search, color: AppTheme.primary),
-                                  suffixIcon: IconButton(
-                                    icon: const Icon(Icons.arrow_forward_rounded, color: AppTheme.primary),
-                                    onPressed: () => _onSearchSubmit(_searchController.text),
+                          FadeInUp(
+                            duration: const Duration(milliseconds: 800),
+                            delay: const Duration(milliseconds: 300),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              child: Container(
+                                height: 55,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(15),
+                                  boxShadow: const [
+                                    BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))
+                                  ],
+                                ),
+                                child: TextField(
+                                  controller: _searchController,
+                                  onSubmitted: _onSearchSubmit,
+                                  decoration: InputDecoration(
+                                    hintText: LocaleProvider.tr('search_products_hint'),
+                                    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+                                    prefixIcon: const Icon(Icons.search, color: AppTheme.primary),
+                                    suffixIcon: IconButton(
+                                      icon: const Icon(Icons.arrow_forward_rounded, color: AppTheme.primary),
+                                      onPressed: () => _onSearchSubmit(_searchController.text),
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                                   ),
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                                 ),
                               ),
                             ),
@@ -281,32 +297,36 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   children: [
                     // QUICK ACTIONS
-                    Row(
-                      children: [
-                        Expanded(
-                          child: actionButton(
-                            context,
-                            LocaleProvider.tr('scan_qr'),
-                            Icons.qr_code_scanner_rounded,
-                            const Color(0xFFEAF5EE),
-                            const Color(0xFF2E6F40),
-                            Border.all(color: const Color(0xFFD4EDDA), width: 1.5),
-                            () => Navigator.push(context, MaterialPageRoute(builder: (context) => const QrScannerScreen())),
+                    FadeInUp(
+                      duration: const Duration(milliseconds: 700),
+                      delay: const Duration(milliseconds: 450),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: actionButton(
+                              context,
+                              LocaleProvider.tr('scan_qr'),
+                              Icons.qr_code_scanner_rounded,
+                              const Color(0xFFEAF5EE),
+                              const Color(0xFF2E6F40),
+                              Border.all(color: const Color(0xFFD4EDDA), width: 1.5),
+                              () => Navigator.push(context, MaterialPageRoute(builder: (context) => const QrScannerScreen())),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: actionButton(
-                            context,
-                            LocaleProvider.tr('all_shops'),
-                            Icons.store_rounded,
-                            const Color(0xFFFFF4EB),
-                            const Color(0xFFE07A5F),
-                            Border.all(color: const Color(0xFFFFE3D1), width: 1.5),
-                            () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen())),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: actionButton(
+                              context,
+                              LocaleProvider.tr('all_shops'),
+                              Icons.store_rounded,
+                              const Color(0xFFFFF4EB),
+                              const Color(0xFFE07A5F),
+                              Border.all(color: const Color(0xFFFFE3D1), width: 1.5),
+                              () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen())),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
 
                     const SizedBox(height: 30),
@@ -343,7 +363,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       )
                     else
-                      ...featuredShops.map((shop) {
+                      ...featuredShops.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final shop = entry.value;
                         final shopMap = {
                           "id": shop.id,
                           "name": shop.name,
@@ -363,18 +385,22 @@ class _HomeScreenState extends State<HomeScreen> {
                           "longitude": shop.longitude,
                         };
 
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: StoreCard(
-                            shop: shopMap,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ProductScreen(shop: shopMap),
-                                ),
-                              );
-                            },
+                        return FadeInUp(
+                          duration: const Duration(milliseconds: 600),
+                          delay: Duration(milliseconds: 100 * index),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: StoreCard(
+                              shop: shopMap,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ProductScreen(shop: shopMap),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         );
                       }),
