@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -21,6 +22,7 @@ import 'services/fcm_service.dart';
 /// when the app is completely killed/terminated.
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (kIsWeb) return;
   await Firebase.initializeApp();
   debugPrint("🔔 FCM Background message received: ${message.notification?.title}");
   // The notification is automatically shown by the system when app is in background/terminated
@@ -30,20 +32,32 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase FIRST (required for FCM)
-  await Firebase.initializeApp();
+  if (!kIsWeb) {
+    try {
+      // Initialize Firebase FIRST (required for FCM)
+      await Firebase.initializeApp();
 
-  // Register the background message handler for when app is killed
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      // Register the background message handler for when app is killed
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    } catch (e) {
+      debugPrint("⚠️ Firebase init skipped or failed: $e");
+    }
+  }
 
   await LocaleProvider.instance.load();
   await CartManager().init();
   await AddressManager().init();
   await ViewManager.init();
-  await NotificationService().init();
 
-  // Initialize FCM push notifications (token + listeners)
-  await FcmService().init();
+  if (!kIsWeb) {
+    try {
+      await NotificationService().init();
+      // Initialize FCM push notifications (token + listeners)
+      await FcmService().init();
+    } catch (e) {
+      debugPrint("⚠️ Mobile services init skipped or failed: $e");
+    }
+  }
 
   runApp(const LocalMartApp());
 }

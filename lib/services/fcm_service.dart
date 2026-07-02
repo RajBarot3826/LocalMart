@@ -11,15 +11,22 @@ class FcmService {
   factory FcmService() => _instance;
   FcmService._internal();
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  FirebaseMessaging? get _messaging => kIsWeb ? null : FirebaseMessaging.instance;
   bool _isInitialized = false;
 
   /// Initialize FCM — call after Firebase.initializeApp()
   Future<void> init() async {
+    if (kIsWeb) {
+      debugPrint("ℹ️ FCM skipped on Web platform.");
+      return;
+    }
     if (_isInitialized) return;
 
+    final msg = _messaging;
+    if (msg == null) return;
+
     // 1. Request notification permission (iOS + Android 13+)
-    NotificationSettings settings = await _messaging.requestPermission(
+    NotificationSettings settings = await msg.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -31,7 +38,7 @@ class FcmService {
     await _getAndSaveToken();
 
     // 3. Listen for token refresh (token can change over time)
-    _messaging.onTokenRefresh.listen((newToken) {
+    msg.onTokenRefresh.listen((newToken) {
       debugPrint("🔄 FCM Token refreshed: $newToken");
       _saveTokenToBackend(newToken);
     });
@@ -49,7 +56,7 @@ class FcmService {
     });
 
     // 6. Check if app was opened from a terminated state notification
-    RemoteMessage? initialMessage = await _messaging.getInitialMessage();
+    RemoteMessage? initialMessage = await msg.getInitialMessage();
     if (initialMessage != null) {
       debugPrint("🚀 App opened from terminated notification: ${initialMessage.data}");
     }
@@ -65,8 +72,11 @@ class FcmService {
 
   /// Get the FCM device token and save it to backend
   Future<void> _getAndSaveToken() async {
+    if (kIsWeb) return;
     try {
-      String? token = await _messaging.getToken();
+      final msg = _messaging;
+      if (msg == null) return;
+      String? token = await msg.getToken();
       if (token != null) {
         debugPrint("🔑 FCM Token: $token");
         await _saveTokenToBackend(token);
@@ -128,6 +138,8 @@ class FcmService {
 
   /// Get the current FCM token (useful for debugging)
   Future<String?> getToken() async {
-    return await _messaging.getToken();
+    if (kIsWeb) return null;
+    final msg = _messaging;
+    return await msg?.getToken();
   }
 }
