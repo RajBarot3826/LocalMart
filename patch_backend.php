@@ -930,7 +930,11 @@ try {
 
     foreach ($stores as &$store) {
         if ($store['logo_path']) {
-            $store['logo_url'] = $base_url . $store['logo_path'];
+            if (strpos($store['logo_path'], 'http') === 0) {
+                $store['logo_url'] = $store['logo_path'];
+            } else {
+                $store['logo_url'] = $base_url . $store['logo_path'];
+            }
         } else {
             $store['logo_url'] = null;
         }
