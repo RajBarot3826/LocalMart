@@ -8,6 +8,8 @@ import '../utils/address_manager.dart';
 import '../utils/locale_provider.dart';
 import 'register_screen.dart';
 import 'rider_register_screen.dart';
+import 'otp_verification_screen.dart';
+import '../services/fcm_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -25,70 +27,133 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isLoading = false;
   String selectedRole = 'customer';
 
+  @override
+  void dispose() {
+    phoneController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loginUser() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => isLoading = true);
 
-    final data = {
-      'phone': phoneController.text.trim(),
-      'email': phoneController.text.trim(),
-      'password': passwordController.text,
-      'role': selectedRole,
-    };
+    final phone = phoneController.text.trim();
+    final password = passwordController.text;
 
-    final response = await ApiHandler.post('app_login.php', data);
+    try {
+      // 1. Verify password credentials first
+      final pwdResponse = await ApiHandler.post('app_password_check.php', {
+        'phone': phone,
+        'password': password,
+        'role': selectedRole,
+      });
 
-    setState(() => isLoading = false);
-
-    if (response != null && response['status'] == 'success') {
-      // Save session
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', true);
-      // Save user ID for rider API calls
-      final userId = response['user']['id'];
-      if (userId != null) {
-        await prefs.setInt('userId', userId is int ? userId : int.tryParse(userId.toString()) ?? 0);
+      if (pwdResponse == null || pwdResponse['status'] != 'success') {
+        throw Exception(pwdResponse?['message'] ?? "Invalid phone number or password.");
       }
-      await prefs.setString('userName', response['user']['name'] ?? 'User');
-      await prefs.setString('userPhone', response['user']['phone'] ?? phoneController.text);
-      await prefs.setString('userEmail', phoneController.text);
-      String role = response['role'] ?? 'customer';
-      await prefs.setString('userRole', role);
-      if (role == 'rider') {
-        await prefs.setString('vehicleNumber', response['user']['vehicle_number'] ?? '');
-        await prefs.setBool('isRiderOnline', false); // Start offline!
-        // Ensure backend knows they are offline
-        try {
-          await ApiHandler.post('toggle_rider_status.php', {
-            'rider_id': userId.toString(),
-            'status': 'offline',
-          });
-        } catch (e) {
-          debugPrint("Failed to set rider offline on login: $e");
+
+      // 2. Trigger Twilio SMS OTP
+      final otpResponse = await ApiHandler.post('send_twilio_otp.php', {
+        'phone': phone,
+      });
+
+      setState(() => isLoading = false);
+
+      if (otpResponse == null || otpResponse['status'] != true) {
+        throw Exception(otpResponse?['message'] ?? "Failed to send login verification SMS.");
+      }
+
+      // 3. Open Mobile SMS OTP verification screen
+      if (!mounted) return;
+      final verified = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OtpVerificationScreen(
+            phone: phone,
+            onResendOtp: () async {
+              await ApiHandler.post('send_twilio_otp.php', {'phone': phone});
+            },
+          ),
+        ),
+      );
+
+      if (verified != true) return; // User cancelled or failed
+
+      // 4. Complete login on success
+      setState(() => isLoading = true);
+
+      final loginResponse = await ApiHandler.post('app_otp_login.php', {
+        'phone': phone,
+        'role': selectedRole,
+      });
+
+      setState(() => isLoading = false);
+
+      if (loginResponse != null && loginResponse['status'] == 'success') {
+        // Save session
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isLoggedIn', true);
+        
+        final userId = loginResponse['user']['id'];
+        if (userId != null) {
+          await prefs.setInt('userId', userId is int ? userId : int.tryParse(userId.toString()) ?? 0);
         }
-      }
-      
-      final userPhone = response['user']['phone'] ?? phoneController.text;
-      await AddressManager().loadForUser(userPhone);
+        await prefs.setString('userName', loginResponse['user']['name'] ?? 'User');
+        await prefs.setString('userPhone', loginResponse['user']['phone'] ?? phone);
+        await prefs.setString('userEmail', loginResponse['user']['email'] ?? '');
+        
+        String role = loginResponse['role'] ?? selectedRole;
+        await prefs.setString('userRole', role);
+        
+        if (role == 'rider') {
+          await prefs.setString('vehicleNumber', loginResponse['user']['vehicle_number'] ?? '');
+          await prefs.setBool('isRiderOnline', false); // Start offline!
+          try {
+            await ApiHandler.post('toggle_rider_status.php', {
+              'rider_id': userId.toString(),
+              'status': 'offline',
+            });
+          } catch (e) {
+            debugPrint("Failed to set rider offline on login: $e");
+          }
+        }
+        
+        final userPhone = loginResponse['user']['phone'] ?? phone;
+        await AddressManager().loadForUser(userPhone);
 
-      CartManager().clearCart();
-      
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(LocaleProvider.tr('login'))),
-      );
+        CartManager().clearCart();
 
-      if (role == 'rider') {
-        Navigator.pushReplacementNamed(context, '/rider_main');
+        try {
+          await FcmService().updateToken();
+        } catch (e) {
+          debugPrint("FCM token update after login error: $e");
+        }
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(LocaleProvider.tr('login'))),
+        );
+
+        if (role == 'rider') {
+          Navigator.pushReplacementNamed(context, '/rider_main');
+        } else {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
       } else {
-        Navigator.pushReplacementNamed(context, '/home');
+        throw Exception(loginResponse?['message'] ?? "Login failed. Please try again.");
       }
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(response?['message'] ?? LocaleProvider.tr('login'))),
-      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll("Exception: ", "")),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -111,10 +176,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(30),
-                  boxShadow: const [
+                  border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+                  boxShadow: [
                     BoxShadow(
-                      color: Colors.black12,
+                      color: AppTheme.primary.withValues(alpha: 0.04),
                       blurRadius: 20,
+                      offset: const Offset(0, 6),
                     )
                   ],
                 ),
@@ -184,13 +251,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       TextFormField(
                         controller: phoneController,
-                        keyboardType: selectedRole == 'customer' ? TextInputType.phone : TextInputType.emailAddress,
+                        keyboardType: TextInputType.phone,
                         decoration: InputDecoration(
-                          hintText: selectedRole == 'customer'
-                              ? LocaleProvider.tr('phone_number')
-                              : "Rider ID",
-                          prefixIcon: Icon(
-                            selectedRole == 'customer' ? Icons.phone : Icons.person,
+                          hintText: LocaleProvider.tr('phone_number'),
+                          prefixIcon: const Icon(
+                            Icons.phone,
                             color: AppTheme.primary,
                           ),
                           filled: true,
@@ -203,11 +268,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return selectedRole == 'customer'
-                                ? LocaleProvider.tr('enter_phone')
-                                : "Please enter your Rider ID";
+                            return LocaleProvider.tr('enter_phone');
                           }
-                          if (selectedRole == 'customer' && value.length < 10) {
+                          if (value.length < 10) {
                             return LocaleProvider.tr('enter_phone');
                           }
                           return null;
@@ -249,19 +312,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 10),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(LocaleProvider.tr('coming_soon'))),
-                            );
-                          },
-                          child: Text(LocaleProvider.tr('forgot_password')),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
                         height: 55,

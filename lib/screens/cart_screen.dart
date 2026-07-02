@@ -60,94 +60,115 @@ class _CartScreenState extends State<CartScreen> {
                   physics: const BouncingScrollPhysics(),
                   children: [
                     // ITEMS LIST
-                    Container(
-                      color: Colors.white,
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: items.length,
-                        separatorBuilder: (_, index) => const Divider(height: 1, color: Colors.black12),
-                        itemBuilder: (context, index) {
-                          final item = items[index];
-                          final product = item.product;
-                          
-                          return Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // IMAGE
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: product.imageUrl.isNotEmpty
-                                      ? ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
-                                          child: Image.network(product.imageUrl, fit: BoxFit.cover),
-                                        )
-                                      : Icon(product.icon, color: AppTheme.primary, size: 40),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        final product = item.product;
+                        
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.all(16.0),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primary.withValues(alpha: 0.02),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              )
+                            ],
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // IMAGE
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEAF5EE),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                const SizedBox(width: 15),
-                                
-                                // DETAILS
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        LocaleProvider.tr(product.name),
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.dark),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 5),
-                                      Text(
-                                        'Sold by ${product.storeId}', // Would be store name in real app if we passed it in product model
-                                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            "₹${product.price}",
-                                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppTheme.dark),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 15),
-                                      Row(
-                                        children: [
-                                          SizedBox(
-                                            width: 120,
-                                            height: 35,
-                                            child: ProductQuantitySelector(product: product),
-                                          ),
-                                          const Spacer(),
-                                          TextButton.icon(
-                                            onPressed: () => CartManager().removeProduct(product),
-                                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                                            label: const Text("Remove", style: TextStyle(color: Colors.red)),
-                                          )
-                                        ],
+                                child: product.imageUrl.isNotEmpty
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(product.imageUrl, fit: BoxFit.cover),
                                       )
-                                    ],
-                                  ),
+                                    : Icon(product.icon, color: AppTheme.primary, size: 40),
+                              ),
+                              const SizedBox(width: 15),
+                              
+                              // DETAILS
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      LocaleProvider.tr(product.name),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.dark),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      'Sold by ${product.storeId}', // Would be store name in real app if we passed it in product model
+                                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          "₹${product.price}",
+                                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppTheme.dark),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 15),
+                                    Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 120,
+                                          height: 35,
+                                          child: ProductQuantitySelector(product: product),
+                                        ),
+                                        const Spacer(),
+                                        TextButton.icon(
+                                          onPressed: () => CartManager().removeProduct(product),
+                                          icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                                          label: const Text("Remove", style: TextStyle(color: Colors.red)),
+                                        )
+                                      ],
+                                    )
+                                  ],
                                 ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 10),
                     
-                    Container(
-                      color: Colors.white,
+                     Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primary.withValues(alpha: 0.02),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          )
+                        ],
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

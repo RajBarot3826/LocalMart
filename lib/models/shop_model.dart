@@ -16,6 +16,8 @@ class Shop {
   final bool deliveryEnabled;
   final String deliveryFeeType; // 'free' or 'paid'
   final double deliveryFee;
+  final double? latitude;
+  final double? longitude;
 
   Shop({
     required this.id,
@@ -35,14 +37,11 @@ class Shop {
     this.deliveryEnabled = false,
     this.deliveryFeeType = 'free',
     this.deliveryFee = 0.0,
+    this.latitude,
+    this.longitude,
   });
 
-  /// Parse from your real API response format:
-  /// {"id":2,"shop_name":"gajananad grocery shop","owner_name":"rakesh parmar",
-  ///  "email":"g@gmail.com","shop_description":"all grocery iteams...",
-  ///  "address":"123,abc,bhavnager.","store_type":"Grocery",
-  ///  "contact_number":"9512667374","qr_code_token":"shop_398dea31dff2",
-  ///  "logo_url":"https://...","logo_path":"assets/...","views":8900}
+  /// Parse from your real API response format
   factory Shop.fromJson(Map<String, dynamic> json) {
     int apiViews = int.tryParse(json['views']?.toString() ?? '0') ?? 0;
 
@@ -64,6 +63,8 @@ class Shop {
       deliveryEnabled: json['delivery_enabled'] == 1 || json['delivery_enabled'] == true || json['delivery_enabled'] == '1',
       deliveryFeeType: (json['delivery_fee_type'] ?? 'free').toString(),
       deliveryFee: double.tryParse(json['delivery_fee']?.toString() ?? '0') ?? 0.0,
+      latitude: double.tryParse(json['latitude']?.toString() ?? ''),
+      longitude: double.tryParse(json['longitude']?.toString() ?? ''),
     );
   }
 }

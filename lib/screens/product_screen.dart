@@ -53,6 +53,8 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
         deliveryEnabled: true,
         deliveryFeeType: (shopData["delivery_fee_type"] ?? 'free').toString(),
         deliveryFee: double.tryParse(shopData["delivery_fee"]?.toString() ?? '0') ?? 0.0,
+        latitude: double.tryParse(shopData["latitude"]?.toString() ?? ''),
+        longitude: double.tryParse(shopData["longitude"]?.toString() ?? ''),
       );
     }
 
@@ -105,6 +107,8 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
             "delivery_enabled": matchedShop.deliveryEnabled,
             "delivery_fee_type": matchedShop.deliveryFeeType,
             "delivery_fee": matchedShop.deliveryFee,
+            "latitude": matchedShop.latitude,
+            "longitude": matchedShop.longitude,
           };
           
           // Update CartManager with latest info
@@ -116,6 +120,8 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
               deliveryEnabled: true,
               deliveryFeeType: matchedShop.deliveryFeeType,
               deliveryFee: matchedShop.deliveryFee,
+              latitude: matchedShop.latitude,
+              longitude: matchedShop.longitude,
             );
           }
         });
@@ -317,7 +323,7 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Hero(
-                          tag: shopData["name"] ?? "shop_icon",
+                          tag: 'shop_${shopData["id"] ?? shopData["name"] ?? "icon"}',
                           child: Container(
                             height: 70,
                             width: 70,
@@ -591,11 +597,15 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
                             return AnimatedBuilder(
                               animation: _controller,
                               builder: (context, child) {
-                                final delay = index * 0.1;
-                                final animValue = Curves.easeOut.transform((_controller.value - delay).clamp(0.0, 1.0));
+                                // Cap the delay so all items fully animate
+                                // Max 0.5s total stagger, so even 20+ items look clean
+                                final delay = (index * 0.05).clamp(0.0, 0.5);
+                                final animValue = Curves.easeOut.transform(
+                                  ((_controller.value - delay) / (1.0 - delay)).clamp(0.0, 1.0),
+                                );
                                 return Opacity(
                                   opacity: animValue,
-                                  child: Transform.translate(offset: Offset(0, 30 * (1 - animValue)), child: productCard(context, product)),
+                                  child: Transform.translate(offset: Offset(0, 20 * (1 - animValue)), child: productCard(context, product)),
                                 );
                               },
                             );
@@ -672,7 +682,14 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(22),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 5))],
+          border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primary.withValues(alpha: 0.03),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           children: [
@@ -680,7 +697,7 @@ class _ProductScreenState extends State<ProductScreen> with SingleTickerProvider
               child: Container(
                 width: double.infinity,
                 margin: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: AppTheme.background, borderRadius: BorderRadius.circular(18)),
+                decoration: BoxDecoration(color: const Color(0xFFEAF5EE), borderRadius: BorderRadius.circular(18)),
                 child: _buildProductImage(product),
               ),
             ),

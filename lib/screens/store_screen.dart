@@ -150,15 +150,22 @@ class _StoreScreenState extends State<StoreScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(15),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)],
+                    border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primary.withValues(alpha: 0.03),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
                   child: TextField(
                     onChanged: _filterShops,
                     decoration: InputDecoration(
                       hintText: LocaleProvider.tr('search_stores_hint'),
-                      prefixIcon: Icon(Icons.search, color: AppTheme.primary),
+                      prefixIcon: const Icon(Icons.search, color: AppTheme.primary),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
                 ),
@@ -256,6 +263,8 @@ class _StoreScreenState extends State<StoreScreen> {
                                   "address": shop.address,
                                   "description": shop.description,
                                   "logoUrl": shop.logoUrl,
+                                  "latitude": shop.latitude,
+                                  "longitude": shop.longitude,
                                 },
                                 onTap: () {
                                   Navigator.push(
@@ -277,6 +286,8 @@ class _StoreScreenState extends State<StoreScreen> {
                                           "delivery_enabled": shop.deliveryEnabled,
                                           "delivery_fee_type": shop.deliveryFeeType,
                                           "delivery_fee": shop.deliveryFee,
+                                          "latitude": shop.latitude,
+                                          "longitude": shop.longitude,
                                         },
                                       ),
                                     ),

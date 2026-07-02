@@ -21,7 +21,7 @@ class _RiderProfileTabState extends State<RiderProfileTab> {
     'rating': '0.0',
     'rating_count': 0,
     'total_deliveries': 0,
-    'month_earnings': 0,
+    'this_month_earnings': 0,
     'acceptance_rate': 0,
     'wallet_balance': 0,
     'vehicle_number': '',
@@ -123,7 +123,7 @@ class _RiderProfileTabState extends State<RiderProfileTab> {
                     children: [
                       Expanded(child: _statBox("${profileData['total_deliveries']}", "Deliveries")),
                       const SizedBox(width: 10),
-                      Expanded(child: _statBox("₹${profileData['month_earnings']}", "This Month")),
+                      Expanded(child: _statBox("₹${profileData['this_month_earnings']}", "This Month")),
                       const SizedBox(width: 10),
                       Expanded(child: _statBox("${profileData['acceptance_rate']}%", "Acceptance")),
                     ],

@@ -7,9 +7,12 @@ FTP_HOST = "ftpupload.net"
 FTP_USER = "if0_42237423"
 FTP_PASS = "pufSSVzpzAK"
 FTP_DIR = "/htdocs/api"
-LOCAL_FILE = "patch_backend.php"
-REMOTE_FILE = "patch_backend.php"
-TRIGGER_URL = "https://localmart.free.nf/api/patch_backend.php"
+import shutil
+shutil.copy("patch_backend.php", "patch_backend_v6.php")
+
+LOCAL_FILE = "patch_backend_v6.php"
+REMOTE_FILE = "patch_backend_v6.php"
+TRIGGER_URL = "https://localmart.free.nf/api/patch_backend_v6.php"
 
 def upload_and_trigger():
     print(f"Connecting to FTP host: {FTP_HOST}...")
@@ -94,4 +97,9 @@ def upload_and_trigger():
         return False
 
 if __name__ == "__main__":
-    upload_and_trigger()
+    try:
+        upload_and_trigger()
+    finally:
+        import os
+        if os.path.exists("patch_backend_v6.php"):
+            os.remove("patch_backend_v6.php")

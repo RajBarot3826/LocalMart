@@ -61,11 +61,12 @@ class StoreCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+              color: AppTheme.primary.withValues(alpha: 0.03),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -79,7 +80,7 @@ class StoreCard extends StatelessWidget {
                   height: 65,
                   width: 65,
                   decoration: BoxDecoration(
-                    color: AppTheme.background,
+                    color: const Color(0xFFEAF5EE),
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: _buildLogo(logoUrl),
@@ -159,21 +160,21 @@ class StoreCard extends StatelessWidget {
                 TextButton.icon(
                   onPressed: () => _callStore(context),
                   icon: const Icon(Icons.call_rounded, size: 18, color: AppTheme.primary),
-                  label: Text(LocaleProvider.tr('call'), style: const TextStyle(color: AppTheme.primary)),
+                  label: Text(LocaleProvider.tr('call'), style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold)),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    backgroundColor: const Color(0xFFEAF5EE),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
                 ),
                 TextButton.icon(
                   onPressed: _shareStore,
-                  icon: const Icon(Icons.share_rounded, size: 18, color: Colors.blue),
-                  label: Text(LocaleProvider.tr('share'), style: const TextStyle(color: Colors.blue)),
+                  icon: const Icon(Icons.share_rounded, size: 18, color: Color(0xFFE07A5F)),
+                  label: Text(LocaleProvider.tr('share'), style: const TextStyle(color: Color(0xFFE07A5F), fontWeight: FontWeight.bold)),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    backgroundColor: Colors.blue.withValues(alpha: 0.1),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    backgroundColor: const Color(0xFFFFF4EB),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   ),
                 ),
               ],

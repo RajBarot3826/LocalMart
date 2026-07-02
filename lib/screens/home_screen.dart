@@ -11,6 +11,8 @@ import 'product_screen.dart';
 import 'profile_screen.dart';
 import 'qr_scanner_screen.dart';
 import 'search_results_screen.dart';
+import '../utils/address_manager.dart';
+import '../services/location_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -35,8 +37,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadUser() async {
     final prefs = await SharedPreferences.getInstance();
+    await AddressManager().init();
     setState(() {
       userName = prefs.getString('userName') ?? "Guest";
+    });
+    // Ask for location permission with a dialog before starting tracking
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (mounted) {
+        final hasPerm = await LocationService().requestPermissionWithPrompt(context);
+        if (hasPerm) {
+          LocationService().startTracking();
+        }
+      }
     });
   }
 
@@ -275,8 +287,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: actionButton(
                             context,
                             LocaleProvider.tr('scan_qr'),
-                            Icons.qr_code_scanner,
-                            AppTheme.primary,
+                            Icons.qr_code_scanner_rounded,
+                            const Color(0xFFEAF5EE),
+                            const Color(0xFF2E6F40),
+                            Border.all(color: const Color(0xFFD4EDDA), width: 1.5),
                             () => Navigator.push(context, MaterialPageRoute(builder: (context) => const QrScannerScreen())),
                           ),
                         ),
@@ -285,8 +299,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: actionButton(
                             context,
                             LocaleProvider.tr('all_shops'),
-                            Icons.store,
-                            Colors.orange.shade700,
+                            Icons.store_rounded,
+                            const Color(0xFFFFF4EB),
+                            const Color(0xFFE07A5F),
+                            Border.all(color: const Color(0xFFFFE3D1), width: 1.5),
                             () => Navigator.push(context, MaterialPageRoute(builder: (context) => const StoreScreen())),
                           ),
                         ),
@@ -343,6 +359,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           "delivery_enabled": shop.deliveryEnabled,
                           "delivery_fee_type": shop.deliveryFeeType,
                           "delivery_fee": shop.deliveryFee,
+                          "latitude": shop.latitude,
+                          "longitude": shop.longitude,
                         };
 
                         return Padding(
@@ -371,24 +389,29 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget actionButton(BuildContext context, String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget actionButton(BuildContext context, String title, IconData icon, Color bgColor, Color textColor, BoxBorder border, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
         height: 110,
         decoration: BoxDecoration(
-          color: color,
+          color: bgColor,
+          border: border,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5))
+            BoxShadow(
+              color: textColor.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
           ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.white, size: 32),
-            const SizedBox(height: 10),
+            Icon(icon, color: textColor, size: 34),
+            const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
@@ -396,7 +419,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 14),
               ),
             ),
           ],

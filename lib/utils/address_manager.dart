@@ -9,6 +9,8 @@ class SavedAddress {
   final String city;
   final String pincode;
   final String phone;
+  final double? latitude;
+  final double? longitude;
 
   SavedAddress({
     required this.label,
@@ -17,6 +19,8 @@ class SavedAddress {
     required this.city,
     required this.pincode,
     required this.phone,
+    this.latitude,
+    this.longitude,
   });
 
   String get fullAddress => '$address,\n$city – $pincode, Gujarat';
@@ -28,6 +32,8 @@ class SavedAddress {
     'city': city,
     'pincode': pincode,
     'phone': phone,
+    'latitude': latitude,
+    'longitude': longitude,
   };
 
   factory SavedAddress.fromJson(Map<String, dynamic> json) => SavedAddress(
@@ -37,6 +43,8 @@ class SavedAddress {
     city: json['city'] ?? '',
     pincode: json['pincode'] ?? '',
     phone: json['phone'] ?? '',
+    latitude: json['latitude'] != null ? double.tryParse(json['latitude'].toString()) : null,
+    longitude: json['longitude'] != null ? double.tryParse(json['longitude'].toString()) : null,
   );
 }
 

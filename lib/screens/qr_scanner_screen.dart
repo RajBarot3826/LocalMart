@@ -93,6 +93,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   "delivery_enabled": shop.deliveryEnabled,
                   "delivery_fee_type": shop.deliveryFeeType,
                   "delivery_fee": shop.deliveryFee,
+                  "latitude": shop.latitude,
+                  "longitude": shop.longitude,
                 },
               ),
             ),

@@ -213,6 +213,35 @@ class ApiHandler {
     return getOfflineData(endpoint);
   }
 
+  /// Fetches raw response body as String (for non-JSON endpoints like patch_backend.php)
+  static Future<String?> getRaw(String endpoint) async {
+    final targetUrl = '$baseUrl/$endpoint';
+
+    // Solve challenge first if not passed
+    if (!_challengePassed) {
+      await get('stores.php'); // Dummy call to solve challenge
+    }
+
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 15);
+      client.userAgent = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36';
+
+      final request = await client.getUrl(Uri.parse(targetUrl));
+      if (_cookies.isNotEmpty) {
+        request.headers.set('Cookie', _cookies.entries.map((e) => '${e.key}=${e.value}').join('; '));
+      }
+
+      final response = await request.close().timeout(const Duration(seconds: 15));
+      final body = await response.transform(utf8.decoder).join();
+      client.close();
+      return body;
+    } catch (e) {
+      debugPrint("Error in getRaw: $e");
+      return null;
+    }
+  }
+
   /// Main POST method (sends application/x-www-form-urlencoded)
   static Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
     final targetUrl = '$baseUrl/$endpoint';
@@ -318,7 +347,6 @@ class ApiHandler {
     }
   }
 
-  /// Solve InfinityFree AES challenge and fetch real data
   static Future<dynamic> _solveAndFetch(String url) async {
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 15);
@@ -343,7 +371,6 @@ class ApiHandler {
       if (_isJson(body1)) {
         _challengePassed = true;
         debugPrint("✅ Got JSON directly — no challenge needed!");
-        client.close();
         return json.decode(body1);
       }
 
@@ -354,7 +381,6 @@ class ApiHandler {
         debugPrint("🔑 Solved AES challenge: __test=$cookieValue");
       } else {
         debugPrint("⚠️ Could not solve AES challenge from HTML");
-        client.close();
         return null;
       }
 
@@ -378,7 +404,6 @@ class ApiHandler {
       if (_isJson(body2)) {
         _challengePassed = true;
         debugPrint("✅ Got real JSON data after solving challenge!");
-        client.close();
         return json.decode(body2);
       }
 
@@ -396,16 +421,16 @@ class ApiHandler {
       if (_isJson(body3)) {
         _challengePassed = true;
         debugPrint("✅ Got JSON on third attempt!");
-        client.close();
         return json.decode(body3);
       }
 
       debugPrint("⚠️ Still getting HTML after challenge. Preview: ${body3.substring(0, body3.length > 200 ? 200 : body3.length)}");
-      client.close();
     } on TimeoutException {
       debugPrint("⏰ Challenge solve timed out");
     } catch (e) {
       debugPrint("❌ Challenge solve error: $e");
+    } finally {
+      client.close();
     }
 
     return null;
@@ -550,12 +575,12 @@ class ApiHandler {
           {
             "id": 1,
             "shop_name": "kariyanu (Offline)",
-            "owner_name": "Raj Barot",
-            "email": "raj03082006@gmail.com",
+            "owner_name": "LocalMart Admin",
+            "email": "support@localmart.com",
             "shop_description": "Connect to internet for real data",
-            "address": "Chandralok flats, Bhavnagar",
+            "address": "LocalMart HQ, Bhavnagar",
             "store_type": "Other",
-            "contact_number": "8866088172",
+            "contact_number": "9999999999",
             "qr_code_token": "shop_084f4036ae2a",
           }
         ]

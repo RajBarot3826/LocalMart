@@ -684,12 +684,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+          border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primary.withValues(alpha: 0.03),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: ListTile(
           leading: Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: AppTheme.background, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: const Color(0xFFEAF5EE), borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: AppTheme.primary, size: 24),
           ),
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),

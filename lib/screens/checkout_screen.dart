@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../utils/cart_manager.dart';
 import '../utils/address_manager.dart';
 import '../utils/api_handler.dart';
 import 'order_success_screen.dart';
+import '../services/notification_service.dart';
+import '../services/ai_assistant_service.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -14,8 +20,10 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+  static const _platform = MethodChannel('com.example.localmart/upi');
   int _currentStep = 1; // 1: Address, 2: Summary+Payment
   bool _isPlacingOrder = false;
+  String _selectedPaymentMethod = 'COD'; // 'COD' or 'UPI'
 
   // Real user data
   String _userName = '';
@@ -35,6 +43,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _loadUserData();
   }
 
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _addressCtrl.dispose();
+    _cityCtrl.dispose();
+    _pincodeCtrl.dispose();
+    _phoneCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
     final phone = prefs.getString('userPhone') ?? '';
@@ -43,6 +61,152 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _userName = prefs.getString('userName') ?? 'User';
       _userPhone = phone;
     });
+  }
+
+  Future<Position?> _getUserLocation({bool forcePrompt = false}) async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Please enable GPS/Location services on your device."),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return null;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          final bool? proceed = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: const Text("Location Access Required"),
+              content: const Text(
+                "LocalMart needs your location permission to calculate delivery fees, find stores near you, and guide the rider to your delivery address.",
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text("CANCEL"),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+                  child: const Text("ALLOW"),
+                ),
+              ],
+            ),
+          );
+          if (proceed != true) return null;
+        }
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Location permission denied. Cannot retrieve location."),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return null;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: const Text("Location Permission Blocked"),
+              content: const Text(
+                "Location permission is permanently denied. Please enable it in App Settings to select your delivery address.",
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("CANCEL"),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Geolocator.openAppSettings();
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+                  child: const Text("OPEN SETTINGS"),
+                ),
+              ],
+            ),
+          );
+        }
+        return null;
+      }
+
+      // Try fast last known location fallback
+      Position? lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) return lastKnown;
+
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+      ).timeout(const Duration(seconds: 4), onTimeout: () {
+        throw TimeoutException("Location request timed out");
+      });
+    } catch (e) {
+      debugPrint("Error fetching user location: $e");
+      return null;
+    }
+  }
+
+  Future<String> _triggerUpiPayment(double amount) async {
+    final String upiId = CartManager().adminUpiId; // Loaded dynamically from server (fallback: 9409630896@upi)
+    final String payeeName = "LocalMart";
+    final String amountStr = amount.toStringAsFixed(2);
+
+    // UPI-safe encoder: GPay/PhonePe reject %20, NPCI spec uses + for spaces
+    String upiEncode(String value) => Uri.encodeComponent(value).replaceAll('%20', '+');
+
+    // Build complete UPI deep link with standard P2P parameters (pa, pn, am, cu)
+    // Excluding merchant-only parameters (tn, tr) to prevent security blocks on personal VPAs
+    final String url = "upi://pay"
+        "?pa=${upiEncode(upiId)}"
+        "&pn=${upiEncode(payeeName)}"
+        "&am=$amountStr"
+        "&cu=INR";
+
+    debugPrint("🔗 UPI Payment URL: $url");
+
+    try {
+      // 1. Attempt to launch via native MethodChannel to get the payment status
+      final String? result = await _platform.invokeMethod<String>(
+        'startUpiPayment',
+        {'upiUri': url},
+      );
+      debugPrint("📱 UPI native result: $result");
+      return result ?? "Status=FAILURE&responseCode=ZD";
+    } catch (e) {
+      debugPrint("Native UPI channel failed/unavailable: $e. Falling back to deep-link launch.");
+      // 2. Fallback to deep-link URL launch if native channel is unsupported
+      final Uri uri = Uri.parse(url);
+      try {
+        final bool launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (!launched) {
+          throw Exception("Could not launch UPI app");
+        }
+      } catch (launchError) {
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          throw Exception("No UPI apps found on your device. Please install Google Pay, PhonePe, or Paytm.");
+        }
+      }
+      return "FALLBACK_MANUAL"; // Indicates we must ask for manual UTR
+    }
   }
 
   Future<void> _placeOrder() async {
@@ -55,20 +219,92 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
+    final cart = CartManager();
+    String paymentMethodString = _selectedPaymentMethod;
+
+    if (_selectedPaymentMethod == 'UPI') {
+      setState(() => _isPlacingOrder = true);
+      try {
+        final String rawResult = await _triggerUpiPayment(cart.totalAmount);
+        debugPrint("📱 UPI app redirection rawResult: $rawResult");
+
+        if (rawResult != "FALLBACK_MANUAL") {
+          final Map<String, String> upiResponse = {};
+          for (final part in rawResult.split('&')) {
+            final kv = part.split('=');
+            if (kv.length == 2) {
+              upiResponse[kv[0].trim().toLowerCase()] = kv[1].trim();
+            }
+          }
+          final String upiStatus = upiResponse['status']?.toUpperCase() ?? '';
+          final String? txnId = upiResponse['txnid'] ?? upiResponse['approvalrefno'];
+          
+          if (upiStatus == 'SUCCESS' || upiStatus == 'SUBMITTED') {
+            final String utr = txnId ?? 'UPI-${DateTime.now().millisecondsSinceEpoch}';
+            paymentMethodString = 'UPI (Ref: $utr)';
+          } else {
+            if (!mounted) return;
+            setState(() => _isPlacingOrder = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Payment not completed or failed in UPI app.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return; // DO NOT place order
+          }
+        } else {
+          // Fallback if status not returned (e.g. emulator, or direct launch return)
+          paymentMethodString = 'UPI (Pending Manual Verification)';
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isPlacingOrder = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('UPI payment failed: ${e.toString().replaceAll("Exception: ", "")}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return; // DO NOT place order
+      }
+    }
+
     setState(() => _isPlacingOrder = true);
 
     try {
-      final cart = CartManager();
+      double? lat = address.latitude;
+      double? lng = address.longitude;
+      if (lat == null || lng == null) {
+        final pos = await _getUserLocation(forcePrompt: true);
+        if (!mounted) return;
+        if (pos != null) {
+          lat = pos.latitude;
+          lng = pos.longitude;
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location permission is required to calculate delivery fee and place your order.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          setState(() => _isPlacingOrder = false);
+          return;
+        }
+      }
+
       final orderData = {
         'user_phone': _userPhone,
         'user_name': _userName,
         'store_id': cart.currentStoreId ?? '',
         'store_name': cart.currentStoreName ?? 'Store',
         'delivery_address': '${address.name}, ${address.fullAddress} (Phone: ${address.phone})',
-        'payment_method': 'COD',
+        'payment_method': paymentMethodString,
         'subtotal': cart.itemsTotal.toStringAsFixed(2),
         'delivery_fee': cart.deliveryFee.toStringAsFixed(2),
         'total_amount': cart.totalAmount.toStringAsFixed(2),
+        'delivery_lat': lat.toString(),
+        'delivery_lng': lng.toString(),
         'items': cart.items.map((item) => {
           'product_id': item.product.id,
           'product_name': item.product.name,
@@ -91,6 +327,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
 
       orderId = response['order_id']?.toString() ?? orderId;
+
+      // Trigger instant Order Placed Notification with AI message
+      final aiMessage = AIAssistantService().generateOrderStatusMessage(
+        status: 'placed',
+        storeName: storeName,
+        orderId: orderId,
+      );
+
+      NotificationService().showNotification(
+        id: orderId.hashCode.abs() % 100000,
+        title: "🎉 Order Placed #$orderId",
+        body: aiMessage,
+        payload: orderId,
+      );
 
       cart.clearCart();
 
@@ -124,6 +374,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _pincodeCtrl.clear();
     _selectedLabel = 'HOME';
 
+    bool isLocating = false;
+    double? capturedLat;
+    double? capturedLng;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -144,7 +398,49 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Add New Address', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.dark)),
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
+                
+                // Use GPS Location Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: isLocating ? null : () async {
+                      setSheetState(() => isLocating = true);
+                      Position? pos = await _getUserLocation(forcePrompt: true);
+                      setSheetState(() => isLocating = false);
+                      if (pos != null) {
+                        setSheetState(() {
+                          capturedLat = pos.latitude;
+                          capturedLng = pos.longitude;
+                          if (_addressCtrl.text.isEmpty) {
+                            _addressCtrl.text = "Live Location (${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)})";
+                          }
+                          if (_cityCtrl.text.isEmpty) _cityCtrl.text = "Ahmedabad";
+                          if (_pincodeCtrl.text.isEmpty) _pincodeCtrl.text = "380001";
+                        });
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text('📍 Captured Location: ${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)}'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: isLocating 
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.my_location, color: Colors.white, size: 18),
+                    label: Text(isLocating ? "Detecting GPS Location..." : "📍 Use My Current GPS Location", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
+
                 // Label Selector
                 Row(
                   children: ['HOME', 'OFFICE', 'OTHER'].map((label) {
@@ -175,13 +471,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       if (_nameCtrl.text.isEmpty || _addressCtrl.text.isEmpty || _cityCtrl.text.isEmpty || _pincodeCtrl.text.isEmpty || _phoneCtrl.text.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Please fill all fields')),
                         );
                         return;
                       }
+                      // Fetch coordinates if not already captured
+                      Position? pos = capturedLat != null && capturedLng != null 
+                        ? null 
+                        : await _getUserLocation();
                       AddressManager().addAddress(SavedAddress(
                         label: _selectedLabel,
                         name: _nameCtrl.text.trim(),
@@ -189,8 +489,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         city: _cityCtrl.text.trim(),
                         pincode: _pincodeCtrl.text.trim(),
                         phone: _phoneCtrl.text.trim(),
+                        latitude: capturedLat ?? pos?.latitude,
+                        longitude: capturedLng ?? pos?.longitude,
                       ));
-                      Navigator.pop(ctx);
+                      if (!mounted) return;
+                      Navigator.pop(context);
                       setState(() {});
                     },
                     style: ElevatedButton.styleFrom(
@@ -338,7 +641,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (addresses.isEmpty)
           Container(
             padding: const EdgeInsets.all(30),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withValues(alpha: 0.02),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                )
+              ],
+            ),
             child: const Center(
               child: Text('No addresses saved yet.\nTap the button below to add one.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
             ),
@@ -440,7 +754,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (address != null)
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withValues(alpha: 0.02),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                )
+              ],
+            ),
             child: Row(
               children: [
                 const Icon(Icons.location_on, color: AppTheme.primary),
@@ -467,7 +792,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         // Order Summary
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primary.withValues(alpha: 0.02),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              )
+            ],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -506,7 +842,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         // Price Details
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primary.withValues(alpha: 0.02),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              )
+            ],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -552,32 +899,95 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
         const SizedBox(height: 15),
 
-        // Payment Method
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
-                child: Icon(Icons.money, color: Colors.green.shade700, size: 28),
+        // Payment Method Selector
+        const Row(
+          children: [
+            Text('💳 ', style: TextStyle(fontSize: 16)),
+            Text('Select Payment Method', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.dark)),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Cash on Delivery Card
+        GestureDetector(
+          onTap: () => setState(() => _selectedPaymentMethod = 'COD'),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _selectedPaymentMethod == 'COD' ? AppTheme.primary : Colors.grey.shade300,
+                width: _selectedPaymentMethod == 'COD' ? 2 : 1,
               ),
-              const SizedBox(width: 15),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Cash on Delivery', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('Pay when you receive the order', style: TextStyle(color: Colors.grey, fontSize: 13)),
-                  ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
+                  child: Icon(Icons.money, color: Colors.green.shade700, size: 28),
                 ),
-              ),
-              Icon(Icons.check_circle, color: AppTheme.primary),
-            ],
+                const SizedBox(width: 15),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Cash on Delivery', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text('Pay when you receive the order', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                if (_selectedPaymentMethod == 'COD')
+                  Icon(Icons.check_circle, color: AppTheme.primary)
+                else
+                  Icon(Icons.radio_button_unchecked, color: Colors.grey.shade400),
+              ],
+            ),
           ),
         ),
-        const SizedBox(height: 30),
+
+        const SizedBox(height: 12),
+
+        // UPI Payment Card
+        GestureDetector(
+          onTap: () => setState(() => _selectedPaymentMethod = 'UPI'),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _selectedPaymentMethod == 'UPI' ? AppTheme.primary : Colors.grey.shade300,
+                width: _selectedPaymentMethod == 'UPI' ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
+                  child: Icon(Icons.qr_code_scanner, color: Colors.blue.shade700, size: 28),
+                ),
+                const SizedBox(width: 15),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Instant UPI Payment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text('Pay instantly via GPay, PhonePe, Paytm', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                if (_selectedPaymentMethod == 'UPI')
+                  Icon(Icons.check_circle, color: AppTheme.primary)
+                else
+                  Icon(Icons.radio_button_unchecked, color: Colors.grey.shade400),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
       ],
     );
   }

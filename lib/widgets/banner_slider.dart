@@ -15,7 +15,7 @@ class BannerSlider extends StatefulWidget {
   const BannerSlider({super.key, required this.products, required this.stores});
 
   @override
-  State<BannerSlider> createState() => _BannerSliderState();
+    State<BannerSlider> createState() => _BannerSliderState();
 }
 
 class _BannerSliderState extends State<BannerSlider> {
@@ -162,6 +162,8 @@ class _BannerSliderState extends State<BannerSlider> {
             "delivery_enabled": shop.deliveryEnabled,
             "delivery_fee_type": shop.deliveryFeeType,
             "delivery_fee": shop.deliveryFee,
+            "latitude": shop.latitude,
+            "longitude": shop.longitude,
           };
           Navigator.push(
             context,

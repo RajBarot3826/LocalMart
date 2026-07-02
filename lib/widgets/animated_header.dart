@@ -62,27 +62,26 @@ class AnimatedHeader extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  height: 110,
-                  width: 110,
-
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 20,
-                      ),
-                    ],
-                  ),
-
-                  child: const Icon(
-                    Icons.storefront,
-                    size: 60,
-                    color: AppTheme.dark,
-                  ),
-                ),
+                 Container(
+                   height: 100,
+                   width: 100,
+                   decoration: BoxDecoration(
+                     color: const Color(0xFFEAF5EE),
+                     borderRadius: BorderRadius.circular(30),
+                     border: Border.all(color: const Color(0xFFD4EDDA), width: 2),
+                     boxShadow: const [
+                       BoxShadow(
+                         color: Colors.black12,
+                         blurRadius: 20,
+                       ),
+                     ],
+                   ),
+                   child: const Icon(
+                     Icons.storefront_rounded,
+                     size: 55,
+                     color: AppTheme.primary,
+                   ),
+                 ),
 
                 const SizedBox(height: 10),
 

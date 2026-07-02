@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "678900469545",
+    "project_id": "localmart-98a03",
+    "storage_bucket": "localmart-98a03.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:678900469545:android:d9b19bb50fc1affa89b138",
+        "android_client_info": {
+          "package_name": "com.example.localmart"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpscwCKUg4Kr-7OFo6n-WdS5uq8JqeZEI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

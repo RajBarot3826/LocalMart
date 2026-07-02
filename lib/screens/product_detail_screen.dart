@@ -191,7 +191,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
                         padding: const EdgeInsets.only(top: 60, bottom: 30),
                         child: _images.isEmpty
                             ? Hero(
-                                tag: widget.product["name"],
+                                tag: 'product_${widget.product["id"] ?? widget.product["name"] ?? "image"}',
                                 child: Icon(
                                   widget.product["icon"] as IconData? ?? Icons.shopping_bag_outlined,
                                   size: 180,
@@ -208,8 +208,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> with SingleTi
                                       });
                                     },
                                     itemBuilder: (context, index) {
+                                      final baseTag = 'product_${widget.product["id"] ?? widget.product["name"] ?? "image"}';
                                       return Hero(
-                                        tag: index == 0 ? widget.product["name"] : '${widget.product["name"]}_$index',
+                                        tag: index == 0 ? baseTag : '${baseTag}_$index',
                                         child: Image.network(
                                           _images[index],
                                           fit: BoxFit.contain,

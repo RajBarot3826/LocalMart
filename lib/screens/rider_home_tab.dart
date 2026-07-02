@@ -44,8 +44,21 @@ class _RiderHomeTabState extends State<RiderHomeTab> {
     if (riderId > 0) {
       _fetchDashboard();
       if (isOnline) {
-        LocationService().startTracking();
-        _startOrderPolling();
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (mounted) {
+            final hasPerm = await LocationService().requestPermissionWithPrompt(context);
+            if (hasPerm) {
+              LocationService().startTracking();
+              _startOrderPolling();
+            } else {
+              setState(() {
+                isOnline = false;
+              });
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('isRiderOnline', false);
+            }
+          }
+        });
       }
     } else {
       setState(() => isLoading = false);
@@ -168,6 +181,11 @@ class _RiderHomeTabState extends State<RiderHomeTab> {
                     value: isOnline,
                     activeThumbColor: AppTheme.primary,
                     onChanged: (val) async {
+                      if (val) {
+                        final hasPerm = await LocationService().requestPermissionWithPrompt(context);
+                        if (!hasPerm) return;
+                      }
+
                       setState(() {
                         isOnline = val;
                       });
@@ -176,6 +194,7 @@ class _RiderHomeTabState extends State<RiderHomeTab> {
                       
                       if (val) {
                         LocationService().startTracking();
+                        _pollTimer?.cancel();
                         _startOrderPolling();
                       } else {
                         LocationService().stopTracking();
@@ -350,7 +369,8 @@ class _RiderHomeTabState extends State<RiderHomeTab> {
     final storeAddress = order['store_address']?.toString() ?? 'Address not available';
     final storePhone = order['store_phone']?.toString() ?? '';
     final deliveryAddress = order['delivery_address']?.toString() ?? order['customer_address']?.toString() ?? 'Address not available';
-    final amount = order['total_amount']?.toString() ?? '0';
+    final totalAmount = order['total_amount']?.toString() ?? '0';
+    final distanceKm = order['distance_km']?.toString() ?? '';
     final items = order['items'] as List? ?? [];
     
     return Container(
@@ -366,10 +386,19 @@ class _RiderHomeTabState extends State<RiderHomeTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(storeName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              Text("₹$amount", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
+              Flexible(
+                child: Text(storeName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis, maxLines: 1),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text("Collect ₹$totalAmount", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14)),
+                  if (distanceKm.isNotEmpty)
+                    Text("$distanceKm km", style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 10),

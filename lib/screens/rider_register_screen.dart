@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../utils/api_handler.dart';
+import 'dual_verification_screen.dart';
+import 'dart:async';
 
 class RiderRegisterScreen extends StatefulWidget {
   const RiderRegisterScreen({super.key});
@@ -23,6 +25,67 @@ class _RiderRegisterScreenState extends State<RiderRegisterScreen> {
 
   Future<void> _registerRider() async {
     if (!_formKey.currentState!.validate()) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    setState(() => isLoading = true);
+
+    final email = emailController.text.trim();
+    final phone = phoneController.text.trim();
+
+    try {
+      // 1. Trigger Email OTP
+      final emailResponse = await ApiHandler.post('send_email_otp.php', {
+        'email': email,
+      });
+
+      if (emailResponse == null || emailResponse['status'] != true) {
+        throw Exception(emailResponse?['message'] ?? "Failed to send verification email. Please check your email.");
+      }
+
+      // 2. Trigger Twilio SMS OTP
+      final smsResponse = await ApiHandler.post('send_twilio_otp.php', {
+        'phone': phone,
+      });
+
+      if (smsResponse == null || smsResponse['status'] != true) {
+        throw Exception(smsResponse?['message'] ?? "Failed to send SMS OTP. Please check your mobile number.");
+      }
+
+      setState(() => isLoading = false);
+
+      // 3. Navigate to Dual Verification Screen
+      final verified = await navigator.push<bool>(
+        MaterialPageRoute(
+          builder: (context) => DualVerificationScreen(
+            email: email,
+            phone: phone,
+            onResendEmailOtp: () async {
+              await ApiHandler.post('send_email_otp.php', {'email': email});
+            },
+            onResendMobileOtp: () async {
+              await ApiHandler.post('send_twilio_otp.php', {'phone': phone});
+            },
+          ),
+        ),
+      );
+
+      if (verified == true && mounted) {
+        _submitRiderRegistrationToBackend();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoading = false);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll("Exception: ", "")),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitRiderRegistrationToBackend() async {
     setState(() => isLoading = true);
 
     final data = {

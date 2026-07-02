@@ -18,6 +18,8 @@ class SearchResultsScreen extends StatefulWidget {
 
 class _SearchResultsScreenState extends State<SearchResultsScreen> {
   bool isLoading = true;
+  bool hasError = false;
+  String errorMsg = '';
   List<Product> searchResults = [];
   Map<String, Shop> storesMap = {};
 
@@ -70,6 +72,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
         storesMap = tempStoresMap;
         searchResults = results;
         isLoading = false;
+        hasError = false;
+        errorMsg = '';
       });
       
     } catch (e) {
@@ -77,6 +81,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
+        hasError = true;
+        errorMsg = e.toString().replaceAll('Exception:', '').trim();
         searchResults = [];
       });
     }
@@ -127,6 +133,48 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
           if (isLoading)
             const SliverFillRemaining(
               child: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
+            )
+          else if (hasError)
+            SliverFillRemaining(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.cloud_off_rounded, size: 80, color: Colors.red.shade400),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Search Failed',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.dark),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        errorMsg.isNotEmpty ? errorMsg : 'Check your internet connection and try again.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            isLoading = true;
+                            hasError = false;
+                          });
+                          _searchProducts();
+                        },
+                        icon: const Icon(Icons.refresh, color: Colors.white),
+                        label: const Text('RETRY', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             )
           else if (searchResults.isEmpty)
             SliverFillRemaining(

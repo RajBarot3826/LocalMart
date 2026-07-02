@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
@@ -11,13 +13,38 @@ import 'utils/locale_provider.dart';
 import 'utils/cart_manager.dart';
 import 'utils/address_manager.dart';
 import 'utils/view_manager.dart';
+import 'services/notification_service.dart';
+import 'services/fcm_service.dart';
+
+/// Top-level background message handler for FCM
+/// Must be a top-level function (not a class method) for Firebase to call it
+/// when the app is completely killed/terminated.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  debugPrint("🔔 FCM Background message received: ${message.notification?.title}");
+  // The notification is automatically shown by the system when app is in background/terminated
+  // No need to show local notification here — Android handles it automatically
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase FIRST (required for FCM)
+  await Firebase.initializeApp();
+
+  // Register the background message handler for when app is killed
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
   await LocaleProvider.instance.load();
   await CartManager().init();
   await AddressManager().init();
   await ViewManager.init();
+  await NotificationService().init();
+
+  // Initialize FCM push notifications (token + listeners)
+  await FcmService().init();
+
   runApp(const LocalMartApp());
 }
 
@@ -70,4 +97,3 @@ class _LocalMartAppState extends State<LocalMartApp> {
     );
   }
 }
-

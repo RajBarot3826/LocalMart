@@ -6,6 +6,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/api_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart';
+import '../services/location_service.dart';
 
 class RiderActiveTab extends StatefulWidget {
   const RiderActiveTab({super.key});
@@ -20,6 +22,23 @@ class _RiderActiveTabState extends State<RiderActiveTab> {
   bool isUpdating = false;
   Map<String, dynamic>? activeOrder;
   Timer? _refreshTimer;
+  LatLng? _riderPosition;
+  StreamSubscription? _locationSub;
+  final MapController _mapController = MapController();
+
+  double _safeParseDouble(dynamic val, double fallback) {
+    if (val == null) return fallback;
+    final d = double.tryParse(val.toString());
+    if (d == null || !d.isFinite) return fallback;
+    return d;
+  }
+
+  double? _safeParseNullableDouble(dynamic val) {
+    if (val == null) return null;
+    final d = double.tryParse(val.toString());
+    if (d == null || !d.isFinite) return null;
+    return d;
+  }
 
   @override
   void initState() {
@@ -28,11 +47,61 @@ class _RiderActiveTabState extends State<RiderActiveTab> {
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted) _fetchActiveOrder(silent: true);
     });
+    // Listen for live GPS updates from LocationService
+    _locationSub = LocationService().positionStream.listen((pos) {
+      if (mounted) {
+        setState(() {
+          _riderPosition = LatLng(pos.latitude, pos.longitude);
+        });
+        // Smoothly pan the map to rider's new position
+        try {
+          _mapController.move(_riderPosition!, _mapController.camera.zoom);
+        } catch (_) {}
+      }
+    });
+    // Use cached position if available, otherwise grab GPS directly
+    final lastPos = LocationService().lastPosition;
+    if (lastPos != null) {
+      _riderPosition = LatLng(lastPos.latitude, lastPos.longitude);
+    } else {
+      _getImmediatePosition();
+    }
+  }
+
+  /// Get GPS position directly so rider marker shows instantly
+  Future<void> _getImmediatePosition() async {
+    try {
+      // Check permission first to avoid silent failures
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        debugPrint("📍 GPS permission not granted, skipping immediate position.");
+        return;
+      }
+
+      Position? pos = await Geolocator.getLastKnownPosition();
+      pos ??= await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      ).timeout(const Duration(seconds: 4));
+
+      final position = pos;
+      if (mounted) {
+        setState(() {
+          _riderPosition = LatLng(position.latitude, position.longitude);
+        });
+        try {
+          _mapController.move(_riderPosition!, _mapController.camera.zoom);
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint("Could not get immediate GPS: $e");
+    }
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _locationSub?.cancel();
+    LocationService().stopTracking();
     super.dispose();
   }
 
@@ -55,13 +124,15 @@ class _RiderActiveTabState extends State<RiderActiveTab> {
         if (response != null && (response['status'] == true || response['status'] == 'success' || response['success'] == true) && response['order'] != null) {
           final String orderStatus = response['order']['status']?.toString().toLowerCase() ?? '';
           if (orderStatus == 'prepared' || orderStatus == 'pending' || orderStatus == 'confirmed') {
-            // It's a ghost order from the old auto-assign system. Ignore it.
             activeOrder = null;
+            LocationService().stopTracking();
           } else {
             activeOrder = response['order'];
+            LocationService().startTracking();
           }
         } else {
           activeOrder = null;
+          LocationService().stopTracking();
         }
       });
     }
@@ -79,18 +150,21 @@ class _RiderActiveTabState extends State<RiderActiveTab> {
 
     if (mounted) {
       setState(() => isUpdating = false);
-      if (response != null && (response['status'] == 'success' || response['status'] == true)) {
-        String msg = 'Order status updated to ${newStatus.replaceAll('_', ' ').toUpperCase()}';
+      if (response != null && (response['status'] == 'success' || response['status'] == true || response['success'] == true)) {
         if (newStatus == 'delivered') {
-          msg = 'Order Delivered Successfully! ✅';
+          final earnedAmount = response['rider_payout']?.toString() ?? activeOrder!['rider_payout']?.toString() ?? '0';
+          final collectedAmount = response['total_amount']?.toString() ?? activeOrder!['total_amount']?.toString() ?? '0';
+          _showDeliverySuccessDialog(earnedAmount, collectedAmount);
+        } else {
+          String msg = 'Order status updated to ${newStatus.replaceAll('_', ' ').toUpperCase()}';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(msg),
+              backgroundColor: Colors.green,
+            ),
+          );
+          _fetchActiveOrder();
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _fetchActiveOrder();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -100,6 +174,81 @@ class _RiderActiveTabState extends State<RiderActiveTab> {
         );
       }
     }
+  }
+
+  void _showDeliverySuccessDialog(String earnedAmount, String collectedAmount) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(color: Colors.green.shade50, shape: BoxShape.circle),
+              child: const Icon(Icons.check_circle, color: Colors.green, size: 60),
+            ),
+            const SizedBox(height: 15),
+            const Text(
+              "Order Delivered!",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.dark),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Order has been successfully marked as delivered.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Collected Cash:", style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                      Text("₹$collectedAmount", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const Divider(height: 15),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("Your Earnings:", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green)),
+                      Text("₹$earnedAmount", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _fetchActiveOrder();
+                },
+                child: const Text("Awesome!", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _callCustomer() async {
@@ -254,10 +403,11 @@ class _RiderActiveTabState extends State<RiderActiveTab> {
     final nextAction = _getNextAction();
     final progressIndex = _getProgressIndex();
 
-    double lat = 21.7645;
-    double lng = 72.1519;
-    if (order['delivery_lat'] != null) lat = double.tryParse(order['delivery_lat'].toString()) ?? lat;
-    if (order['delivery_lng'] != null) lng = double.tryParse(order['delivery_lng'].toString()) ?? lng;
+    double lat = _safeParseDouble(order['delivery_lat'], 21.7645);
+    double lng = _safeParseDouble(order['delivery_lng'], 72.1519);
+
+    double? storeLat = _safeParseNullableDouble(order['store_lat']);
+    double? storeLng = _safeParseNullableDouble(order['store_lng']);
 
     return SingleChildScrollView(
       child: Column(
@@ -279,15 +429,116 @@ class _RiderActiveTabState extends State<RiderActiveTab> {
           ),
 
           SizedBox(
-            height: 220,
-            child: FlutterMap(
-              options: MapOptions(initialCenter: LatLng(lat, lng), initialZoom: 14.0),
+            height: 250,
+            child: Stack(
               children: [
-                TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.localmart'),
-                MarkerLayer(
-                  markers: [
-                    Marker(point: LatLng(lat, lng), child: const Icon(Icons.location_on, color: Colors.red, size: 40)),
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _riderPosition ?? (storeLat != null && storeLng != null ? LatLng(storeLat, storeLng) : LatLng(lat, lng)),
+                    initialZoom: 14.0,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&key=AIzaSyALWv_81PZ-LV1QMDTm1cGC7KkALKepVPM',
+                      userAgentPackageName: 'com.example.localmart',
+                    ),
+                    // Dotted Route Lines (Rider -> Store -> Customer)
+                    PolylineLayer(
+                      polylines: [
+                        // Rider to Store
+                        if (_riderPosition != null && storeLat != null && storeLng != null && progressIndex < 3)
+                          Polyline(
+                            points: [_riderPosition!, LatLng(storeLat, storeLng)],
+                            color: Colors.blue,
+                            strokeWidth: 4.0,
+                          ),
+                        // Store to Customer
+                        if (storeLat != null && storeLng != null)
+                          Polyline(
+                            points: [LatLng(storeLat, storeLng), LatLng(lat, lng)],
+                            color: Colors.orange,
+                            strokeWidth: 4.0,
+                          ),
+                        // Rider to Customer (if already picked up)
+                        if (_riderPosition != null && progressIndex >= 3)
+                          Polyline(
+                            points: [_riderPosition!, LatLng(lat, lng)],
+                            color: Colors.green,
+                            strokeWidth: 4.0,
+                          ),
+                      ],
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        // 1. Store Marker (Blue bag icon)
+                        if (storeLat != null && storeLng != null)
+                          Marker(
+                            point: LatLng(storeLat, storeLng),
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: const BoxDecoration(
+                                color: Colors.blue,
+                                shape: BoxShape.circle,
+                                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                              ),
+                              child: const Icon(Icons.store, color: Colors.white, size: 16),
+                            ),
+                          ),
+                        // 2. Customer Destination Marker (Red pin icon)
+                        Marker(
+                          point: LatLng(lat, lng),
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                            ),
+                            child: const Icon(Icons.person_pin_circle, color: Colors.white, size: 16),
+                          ),
+                        ),
+                        // 3. Live Rider Scooter Marker (Green bike icon)
+                        if (_riderPosition != null)
+                          Marker(
+                            point: _riderPosition!,
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: const BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 6, spreadRadius: 1)],
+                              ),
+                              child: const Icon(Icons.two_wheeler, color: Colors.white, size: 18),
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
+                ),
+                // Live tracking badge
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _riderPosition != null ? Colors.green : Colors.orange,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_riderPosition != null ? Icons.gps_fixed : Icons.gps_not_fixed, color: Colors.white, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          _riderPosition != null ? "LIVE TRACKING" : "GPS LOADING...",
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -390,7 +641,7 @@ class _RiderActiveTabState extends State<RiderActiveTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("Total Amount", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const Text("Cash to Collect from Customer", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     Text("₹$totalAmount", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
                   ],
                 ),

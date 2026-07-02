@@ -4,6 +4,8 @@ import '../theme/app_theme.dart';
 import '../widgets/animated_header.dart';
 import '../utils/api_handler.dart';
 import '../utils/locale_provider.dart';
+import 'dual_verification_screen.dart';
+import 'dart:async';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -34,36 +36,106 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    final navigator = Navigator.of(context);
+
     setState(() => isLoading = true);
 
-    final data = {
-      'name': nameController.text.trim(),
-      'phone': phoneController.text.trim(),
-      'email': emailController.text.trim(),
-      'password': passwordController.text,
-    };
+    final email = emailController.text.trim();
+    final phone = phoneController.text.trim();
 
-    final response = await ApiHandler.post('app_register.php', data);
+    try {
+      // 1. Trigger Email OTP
+      final emailResponse = await ApiHandler.post('send_email_otp.php', {
+        'email': email,
+      });
 
-    setState(() => isLoading = false);
+      if (emailResponse == null || emailResponse['status'] != true) {
+        throw Exception(emailResponse?['message'] ?? "Failed to send verification email. Please check your email.");
+      }
 
-    if (response != null && response['status'] == 'success') {
-      // Save session
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', true);
-      await prefs.setString('userName', response['user']['name'] ?? nameController.text);
-      await prefs.setString('userPhone', response['user']['phone'] ?? phoneController.text);
-      
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(LocaleProvider.tr('register'))),
+      // 2. Trigger Twilio SMS OTP
+      final smsResponse = await ApiHandler.post('send_twilio_otp.php', {
+        'phone': phone,
+      });
+
+      if (smsResponse == null || smsResponse['status'] != true) {
+        throw Exception(smsResponse?['message'] ?? "Failed to send SMS OTP. Please check your mobile number.");
+      }
+
+      setState(() => isLoading = false);
+
+      // 3. Navigate to Dual Verification Screen
+      final verified = await navigator.push<bool>(
+        MaterialPageRoute(
+          builder: (context) => DualVerificationScreen(
+            email: email,
+            phone: phone,
+            onResendEmailOtp: () async {
+              await ApiHandler.post('send_email_otp.php', {'email': email});
+            },
+            onResendMobileOtp: () async {
+              await ApiHandler.post('send_twilio_otp.php', {'phone': phone});
+            },
+          ),
+        ),
       );
-      Navigator.pushReplacementNamed(context, '/home');
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(response?['message'] ?? LocaleProvider.tr('register'))),
-      );
+
+      if (verified == true && mounted) {
+        _submitRegistrationToBackend();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll("Exception: ", "")),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitRegistrationToBackend() async {
+    setState(() => isLoading = true);
+
+    try {
+      final data = {
+        'name': nameController.text.trim(),
+        'phone': phoneController.text.trim(),
+        'email': emailController.text.trim(),
+        'password': passwordController.text,
+      };
+
+      final response = await ApiHandler.post('app_register.php', data);
+
+      if (mounted) setState(() => isLoading = false);
+
+      if (response != null && response['status'] == 'success') {
+        // Save session
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isLoggedIn', true);
+        await prefs.setString('userName', response['user']['name'] ?? nameController.text);
+        await prefs.setString('userPhone', response['user']['phone'] ?? phoneController.text);
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(LocaleProvider.tr('register'))),
+        );
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(response?['message'] ?? LocaleProvider.tr('register'))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Registration connection error: $e"), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -86,10 +158,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(30),
-                  boxShadow: const [
+                  border: Border.all(color: const Color(0xFFEAF5EE), width: 1.5),
+                  boxShadow: [
                     BoxShadow(
-                      color: Colors.black12,
+                      color: AppTheme.primary.withValues(alpha: 0.04),
                       blurRadius: 20,
+                      offset: const Offset(0, 6),
                     )
                   ],
                 ),
@@ -110,7 +184,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: 15),
                       buildField(LocaleProvider.tr('email'), Icons.email, emailController, (value) {
                         if (value == null || value.isEmpty) return LocaleProvider.tr('enter_email');
-                        if (!value.contains('@')) return LocaleProvider.tr('enter_email');
+                        final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+                        if (!emailRegex.hasMatch(value)) return LocaleProvider.tr('enter_email');
                         return null;
                       }, keyboardType: TextInputType.emailAddress),
                       const SizedBox(height: 15),
